@@ -10,3 +10,4 @@ env.bak/
 __pycache__/
 pip-selfcheck.json
 /data/*
+data/*

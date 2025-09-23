@@ -1,55 +1,58 @@
-schemat jakim proponuje iść: (w sumie to gotowane z chatem, ale całkiem spoko uporządkowane)
+Schemat co postaram się poukładać tak, może być że połowe z tego wypierdole, ale warto mieć marzenia
+syzyfus maximus
 
-gps-jammer-app/
-├─ config/
-│  └─ default.yaml
-├─ data/
-│  ├─ recordings/
-│  └─ cache/
-├─ resources/
-│  ├─ icons/                   # png/svg dla toolbarów, markerów
-│  ├─ ui/                      # pliki .ui z Qt Designer (opcjonalnie)
-│  └─ styles/                  # 🔹 tu trzymasz wygląd
-│     ├─ main.qss              # główny stylesheet (QPushButton, QLabel…)
-│     ├─ dark.qss              # alternatywny motyw
-│     ├─ light.qss             # jasny motyw
-│     └─ widgets/              # specyficzne style dla widgetów (mapa, panel)
-│        ├─ buttons.qss
-│        └─ panels.qss
-├─ src/
-│  ├─ app.py
-│  ├─ mainwindow.py
-│  ├─ views/
-│  │  ├─ map_widget.py
-│  │  └─ panels.py
-│  ├─ logic/
-│  │  ├─ app_controller.py
-│  │  └─ map_controller.py
-│  ├─ models/
-│  │  ├─ geo.py
-│  │  ├─ detection.py
-│  │  └─ sdr.py
-│  ├─ io_sources/
-│  │  ├─ rtl_file_reader.py
-│  │  └─ metadata.py
-│  ├─ dsp/
-│  │  ├─ preprocessing.py
-│  │  ├─ psd.py
-│  │  └─ features.py
-│  ├─ detectors/
-│  │  ├─ base.py
-│  │  └─ prototype.py
-│  ├─ workers/
-│  │  ├─ ingestion_worker.py
-│  │  └─ detection_worker.py
-│  ├─ services/
-│  │  ├─ storage.py
-│  │  ├─ settings_service.py
-│  │  └─ style_service.py        # 🔹 loader styli (QSS → apply)
-│  ├─ utils/
-│  │  ├─ geo_math.py
-│  │  └─ logging_setup.py
-│  └─ __init__.py
-└─ tests/
-   ├─ unit/
-   └─ integration/
+
+
+gps-jammer-app/                       # Główny katalog aplikacji
+├─ config/                            # Konfiguracje aplikacji
+│  └─ default.yaml                    # Domyślne ustawienia (np. ścieżki, parametry)
+├─ data/                              # Dane wejściowe/wyjściowe aplikacji
+│  ├─ recordings/                     # Zapisane nagrania SDR/GPS
+│  └─ cache/                          # Tymczasowe pliki, cache
+├─ resources/                         # Zasoby statyczne (grafika, style, UI)
+│  ├─ icons/                          # Ikony do toolbarów, markerów na mapie
+│  ├─ ui/                             # Pliki .ui z Qt Designer (opcjonalnie)
+│  └─ styles/                         # Style aplikacji (QSS)
+│     ├─ main.qss                     # Główny stylesheet (np. dla przycisków, etykiet)
+│     ├─ dark.qss                     # Motyw ciemny
+│     ├─ light.qss                    # Motyw jasny
+│     └─ widgets/                     # Style dla konkretnych widgetów
+│        ├─ buttons.qss               # Style dla przycisków
+│        └─ panels.qss                # Style dla paneli
+├─ src/                               # Źródła aplikacji (kod Python)
+│  ├─ app.py                          # Punkt wejścia aplikacji (main)
+│  ├─ mainwindow.py                   # Logika głównego okna GUI
+│  ├─ views/                          # Widoki GUI (widgety, panele)
+│  │  ├─ map_widget.py                # Widget mapy (np. wyświetlanie lokalizacji)
+│  │  └─ panels.py                    # Panele boczne/interfejsowe
+│  ├─ logic/                          # Logika aplikacji (kontrolery)
+│  │  ├─ app_controller.py            # Kontroler główny aplikacji
+│  │  └─ map_controller.py            # Kontroler mapy (sterowanie widokiem mapy)
+│  ├─ models/                         # Modele danych (struktury, klasy)
+│  │  ├─ geo.py                       # Model geolokalizacji (koordynaty, punkty)
+│  │  ├─ detection.py                 # Model detekcji zakłóceń
+│  │  └─ sdr.py                       # Model danych SDR (sygnały, parametry)
+│  ├─ io_sources/                     # Źródła danych wejściowych
+│  │  ├─ rtl_file_reader.py           # Odczyt plików z SDR (np. RTL-SDR)
+│  │  └─ metadata.py                  # Obsługa metadanych nagrań
+│  ├─ dsp/                            # Przetwarzanie sygnałów (Digital Signal Processing)
+│  │  ├─ preprocessing.py             # Wstępne przetwarzanie sygnału
+│  │  ├─ psd.py                       # Obliczanie widma mocy (Power Spectral Density)
+│  │  └─ features.py                  # Ekstrakcja cech z sygnału
+│  ├─ detectors/                      # Detektory zakłóceń
+│  │  ├─ base.py                      # Bazowy interfejs detektora
+│  │  └─ prototype.py                 # Prototypowy detektor zakłóceń
+│  ├─ workers/                        # Pracownicy (wątki, procesy)
+│  │  ├─ ingestion_worker.py          # Wątek do pobierania danych
+│  │  └─ detection_worker.py          # Wątek do detekcji zakłóceń
+│  ├─ services/                       # Usługi aplikacji (np. storage, ustawienia)
+│  │  ├─ storage.py                   # Obsługa zapisu/odczytu danych
+│  │  ├─ settings_service.py          # Obsługa ustawień aplikacji
+│  │  └─ style_service.py             # Loader styli QSS i ich aplikacja
+│  ├─ utils/                          # Narzędzia pomocnicze
+│  │  ├─ geo_math.py                  # Funkcje matematyczne dla geolokalizacji
+│  │  └─ logging_setup.py             # Konfiguracja logowania
+│  └─ __init__.py                     # Plik inicjalizujący moduł src
+└─ tests/                             # Testy automatyczne
+   ├─ unit/                           # Testy jednostkowe
+   └─ integration/                    # Testy integracyjne
