@@ -1,58 +1,107 @@
-Schemat co postaram się poukładać tak, może być że połowe z tego wypierdole, ale warto mieć marzenia
-syzyfus maximus
+Oto sformatowana notatka w stylu, który fajnie sprawdzi się jako commit note albo notatka projektowa do gita:
 
+---
 
+# 📝 Notatka projektowa – gps-jammer-app
 
+## 🎯 Cel projektu (BUŁACINA)
+
+**Zakres pracy i oczekiwany wynik**:
+Opracowanie, implementacja i przetestowanie **zintegrowanego systemu** do analizy, detekcji i lokalizacji zakłóceń wpływających na działanie systemów GNSS.
+
+Zakres prac obejmuje:
+
+* Analizę literatury nt. systemów GNSS, zakłóceń, metod detekcji i lokalizacji.
+* Zaprojektowanie architektury systemu (akwizycja danych GNSS, opcjonalne generowanie zakłóceń).
+* Implementację algorytmów analizy sygnałów GNSS i wielopoziomowej detekcji/klasyfikacji zakłóceń.
+* Implementację metody lokalizacji źródeł zakłóceń.
+* Opracowanie interfejsu graficznego (wizualizacja danych, zakłóceń, lokalizacji).
+* Integrację komponentów i testy w labie oraz – jeśli możliwe – w warunkach rzeczywistych.
+
+👉 Rezultat: **system demonstracyjny** zdolny do odbioru, analizy, detekcji i lokalizacji zakłóceń GNSS + dokumentacja + raport.
+
+---
+
+## 📌 To-Do (24.09 – cel: do końca tygodnia)
+
+### Łysy kod
+
+* [ ] Edycja – usunąć rzeczy nieużywane
+* [ ] Wywalić całość (brak sensu istnienia)
+* [ ] Wywalić `config file` (raczej cały katalog)
+
+### Sygnalówka
+
+* [ ] Zaimplementować funkcję do **wykrywania zakłóceń**
+
+  * Zmienna bool → czy występuje zakłócenie
+  * Lista → jakie zakłócenia znaleziono
+  * (Opcjonalnie) klasyfikacja typu zakłócenia
+
+### Frontend
+
+* [ ] Poprawić strukturę, żeby miała więcej sensu
+* [ ] Ładnie porozdzielać komponenty
+
+---
+
+## 📂 Struktura projektu
+
+```
 gps-jammer-app/                       # Główny katalog aplikacji
 ├─ config/                            # Konfiguracje aplikacji
-│  └─ default.yaml                    # Domyślne ustawienia (np. ścieżki, parametry)
-├─ data/                              # Dane wejściowe/wyjściowe aplikacji
+├─ data/                              # Dane wejściowe/wyjściowe
 │  ├─ recordings/                     # Zapisane nagrania SDR/GPS
-│  └─ cache/                          # Tymczasowe pliki, cache
+│  └─ cache/                          # Tymczasowe pliki
 ├─ resources/                         # Zasoby statyczne (grafika, style, UI)
-│  ├─ icons/                          # Ikony do toolbarów, markerów na mapie
-│  ├─ ui/                             # Pliki .ui z Qt Designer (opcjonalnie)
+│  ├─ icons/                          # Ikony do toolbarów, markerów
+│  ├─ ui/                             # Pliki .ui z Qt Designer
 │  └─ styles/                         # Style aplikacji (QSS)
-│     ├─ main.qss                     # Główny stylesheet (np. dla przycisków, etykiet)
+│     ├─ main.qss                     # Główny stylesheet
 │     ├─ dark.qss                     # Motyw ciemny
 │     ├─ light.qss                    # Motyw jasny
-│     └─ widgets/                     # Style dla konkretnych widgetów
-│        ├─ buttons.qss               # Style dla przycisków
-│        └─ panels.qss                # Style dla paneli
-├─ src/                               # Źródła aplikacji (kod Python)
-│  ├─ app.py                          # Punkt wejścia aplikacji (main)
+│     └─ widgets/                     # Style widgetów
+│        ├─ buttons.qss               # Przyciski
+│        └─ panels.qss                # Panele
+├─ src/                               # Źródła aplikacji (Python)
+│  ├─ app.py                          # Punkt wejścia (main)
 │  ├─ mainwindow.py                   # Logika głównego okna GUI
-│  ├─ views/                          # Widoki GUI (widgety, panele)
-│  │  ├─ map_widget.py                # Widget mapy (np. wyświetlanie lokalizacji)
-│  │  └─ panels.py                    # Panele boczne/interfejsowe
-│  ├─ logic/                          # Logika aplikacji (kontrolery)
-│  │  ├─ app_controller.py            # Kontroler główny aplikacji
-│  │  └─ map_controller.py            # Kontroler mapy (sterowanie widokiem mapy)
-│  ├─ models/                         # Modele danych (struktury, klasy)
-│  │  ├─ geo.py                       # Model geolokalizacji (koordynaty, punkty)
-│  │  ├─ detection.py                 # Model detekcji zakłóceń
-│  │  └─ sdr.py                       # Model danych SDR (sygnały, parametry)
-│  ├─ io_sources/                     # Źródła danych wejściowych
-│  │  ├─ rtl_file_reader.py           # Odczyt plików z SDR (np. RTL-SDR)
-│  │  └─ metadata.py                  # Obsługa metadanych nagrań
-│  ├─ dsp/                            # Przetwarzanie sygnałów (Digital Signal Processing)
-│  │  ├─ preprocessing.py             # Wstępne przetwarzanie sygnału
-│  │  ├─ psd.py                       # Obliczanie widma mocy (Power Spectral Density)
-│  │  └─ features.py                  # Ekstrakcja cech z sygnału
+│  ├─ views/                          # Widoki GUI
+│  │  ├─ map_widget.py                # Widget mapy
+│  │  └─ panels.py                    # Panele boczne
+│  ├─ logic/                          # Logika (kontrolery)
+│  │  ├─ app_controller.py            # Kontroler główny
+│  │  └─ map_controller.py            # Kontroler mapy
+│  ├─ models/                         # Modele danych
+│  │  ├─ geo.py                       # Geolokalizacja
+│  │  ├─ detection.py                 # Detekcja zakłóceń
+│  │  └─ sdr.py                       # Dane SDR
+│  ├─ io_sources/                     # Źródła danych
+│  │  ├─ rtl_file_reader.py           # Odczyt SDR
+│  │  └─ metadata.py                  # Obsługa metadanych
+│  ├─ dsp/                            # Digital Signal Processing
+│  │  ├─ preprocessing.py             # Wstępne przetwarzanie
+│  │  ├─ psd.py                       # Widmo mocy (PSD)
+│  │  └─ features.py                  # Ekstrakcja cech
 │  ├─ detectors/                      # Detektory zakłóceń
-│  │  ├─ base.py                      # Bazowy interfejs detektora
-│  │  └─ prototype.py                 # Prototypowy detektor zakłóceń
-│  ├─ workers/                        # Pracownicy (wątki, procesy)
-│  │  ├─ ingestion_worker.py          # Wątek do pobierania danych
-│  │  └─ detection_worker.py          # Wątek do detekcji zakłóceń
-│  ├─ services/                       # Usługi aplikacji (np. storage, ustawienia)
-│  │  ├─ storage.py                   # Obsługa zapisu/odczytu danych
-│  │  ├─ settings_service.py          # Obsługa ustawień aplikacji
-│  │  └─ style_service.py             # Loader styli QSS i ich aplikacja
+│  │  ├─ base.py                      # Interfejs bazowy
+│  │  └─ prototype.py                 # Prototypowy detektor
+│  ├─ workers/                        # Wątki / procesy
+│  │  ├─ ingestion_worker.py          # Pobieranie danych
+│  │  └─ detection_worker.py          # Detekcja zakłóceń
+│  ├─ services/                       # Usługi aplikacji
+│  │  ├─ storage.py                   # Obsługa zapisu/odczytu
+│  │  ├─ settings_service.py          # Obsługa ustawień
+│  │  └─ style_service.py             # Style QSS
 │  ├─ utils/                          # Narzędzia pomocnicze
-│  │  ├─ geo_math.py                  # Funkcje matematyczne dla geolokalizacji
+│  │  ├─ geo_math.py                  # Funkcje matematyczne
 │  │  └─ logging_setup.py             # Konfiguracja logowania
-│  └─ __init__.py                     # Plik inicjalizujący moduł src
+│  └─ __init__.py                     # Init modułu src
 └─ tests/                             # Testy automatyczne
-   ├─ unit/                           # Testy jednostkowe
-   └─ integration/                    # Testy integracyjne
+   ├─ unit/                           # Jednostkowe
+   └─ integration/                    # Integracyjne
+```
+
+---
+
+Chcesz, żebym przygotował z tego **changelog/commit message** w stylu np. *Conventional Commits* (`feat:`, `fix:`, `refactor:` itd.), czy raczej ma to zostać jako ogólna notatka projektowa?
