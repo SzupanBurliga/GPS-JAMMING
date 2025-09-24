@@ -1,3 +1,4 @@
+Syzyfus maximus
 ---
 
 # 📝 Notatka projektowa – gps-jammer-app
