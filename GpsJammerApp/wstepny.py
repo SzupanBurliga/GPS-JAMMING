@@ -181,36 +181,83 @@ class GPSAnalysisThread(QThread):
     def run(self):
         """Symulacja analizy pliku GPS - zastąp właściwą implementacją"""
         try:
+            import subprocess
             import random
-            import time
-            
+
             points = []
-            file_size = os.path.getsize(self.file_path) if os.path.exists(self.file_path) else 1000000
-            
-            # Symulacja analizy - zastąp prawdziwą analizą sygnału
-            for i in range(20):  # 20 punktów testowych
-                if self.isInterruptionRequested():
-                    return
-                    
-                # Generuj losowe punkty wokół Krakowa
-                lat = LAT + random.uniform(-0.01, 0.01)
-                lng = LNG + random.uniform(-0.01, 0.01)
-                strength = random.randint(10, 95)
-                frequency = round(random.uniform(1570, 1580), 2)
-                
-                points.append({
-                    'lat': lat,
-                    'lng': lng,
-                    'strength': strength,
-                    'frequency': frequency,
-                    'timestamp': i
-                })
-                
-                self.progress_update.emit(int((i + 1) / 20 * 100))
-                time.sleep(0.1)  # Symulacja czasu analizy
-                
+
+            process = subprocess.Popen(
+                "backend/bin/gnss-sdrlib-pvt",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1
+            )
+
+            etime = 0
+
+            while True:
+                output = process.stdout.readline()
+                if output == b'' and process.poll() is not None:
+                    break
+
+                if output:
+                    output_str = output.decode('utf-8').rstrip('\n')
+                    splited = output_str.split("|")
+
+                    if splited[0] == "ETIME":
+                        etime = splited[1]                        
+                    elif splited[0] == "LLA":
+                        try:
+                            lat = float(splited[2])
+                            lng = float(splited[3])
+                            strength = random.randint(10, 95)
+                            frequency = round(random.uniform(1570, 1580), 2)
+                            if lat > 0 and lng > 0:
+                                points.append({
+                                    'lat': lat,
+                                    'lng': lng,
+                                    'strength': strength,
+                                    'frequency': frequency,
+                                    'timestamp': etime
+                                })
+                                break
+                        except ValueError:
+                            print("Value error!")
+                            break
+
+            process.terminate()
+            return_code = process.poll()
             self.analysis_complete.emit(points)
+            # import random
+
+            # import time
             
+            # points = []
+            # file_size = os.path.getsize(self.file_path) if os.path.exists(self.file_path) else 1000000
+            
+            # # Symulacja analizy - zastąp prawdziwą analizą sygnału
+            # for i in range(20):  # 20 punktów testowych
+            #     if self.isInterruptionRequested():
+            #         return
+                    
+            #     # Generuj losowe punkty wokół Krakowa
+            #     lat = LAT + random.uniform(-0.01, 0.01)
+            #     lng = LNG + random.uniform(-0.01, 0.01)
+            #     strength = random.randint(10, 95)
+            #     frequency = round(random.uniform(1570, 1580), 2)
+                
+            #     points.append({
+            #         'lat': lat,
+            #         'lng': lng,
+            #         'strength': strength,
+            #         'frequency': frequency,
+            #         'timestamp': i
+            #     })
+                
+            #     self.progress_update.emit(int((i + 1) / 20 * 100))
+            #     time.sleep(0.1)  # Symulacja czasu analizy
+                
+            # self.analysis_complete.emit(points)            
         except Exception as e:
             print(f"Błąd analizy: {e}")
             self.analysis_complete.emit([])
