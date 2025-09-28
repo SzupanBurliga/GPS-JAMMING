@@ -9,4 +9,9 @@ env.bak/
 .python_env/
 __pycache__/
 pip-selfcheck.json
+<<<<<<< HEAD
 /data/*
+=======
+/data/*
+data/*
+>>>>>>> 954c9abdbc815241ef1d293be14d4a0811b18cd8
