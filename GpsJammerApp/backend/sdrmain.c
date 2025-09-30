@@ -60,8 +60,14 @@ int main(int argc, char **argv)
   // Set processor to Performance mode
   // (Might add this as system command)
 
-  // Read ini file
-  if (readinifile(&sdrini)<0) {
+  // Obsługa pliku wejściowego z linii poleceń
+  if (argc < 2) {
+    printf("Użycie: %s <plik_do_analizy>\n", argv[0]);
+    return 1;
+  }
+  char *input_file = argv[1];
+
+  if (loadinit(&sdrini, input_file)<0) {
     return -1;
   }
 

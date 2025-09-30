@@ -6,209 +6,58 @@
 //-----------------------------------------------------------------------------
 #include "sdr.h"
 
-// read ini file --------------------------------------------------------------
-static int GetFileAttributes(const char *file)
-{
-    FILE *fp;
-    if (!(fp=fopen(file,"r"))) return -1;
-    fclose(fp);
-    return 0;
-}
-static void GetPrivateProfileString(const char *sec, const char *key,
-    const char *def, char *str, int len, const char *file)
-{
-    FILE *fp;
-    char buff[1024],*p,*q;
-    int enter=0;
-
-    strncpy(str,def,len-1); str[len-1]='\0';
-
-    if (!(fp=fopen(file,"r"))) {
-        fprintf(stderr,"ini file open error [%s]\n",file);
-        return;
-    }
-    while (fgets(buff,sizeof(buff),fp)) {
-        if ((p=strchr(buff,';'))) *p='\0';
-        if ((p=strchr(buff,'['))&&(q=strchr(p+1,']'))) {
-            *q='\0';
-            enter=!strcmp(p+1,sec);
-        }
-        else if (enter&&(p=strchr(buff,'='))) {
-            *p='\0';
-            for (q=p-1;q>=buff&&(*q==' '||*q=='\t');) *q--='\0';
-            if (strcmp(buff,key)) continue;
-            for (q=p+1+strlen(p+1)-1;q>=p+1&&(*q=='\r'||*q=='\n');) *q--='\0';
-            strncpy(str,p+1,len-1); str[len-1]='\0';
-            break;
-        }
-    }
-    fclose(fp);
-}
-
-// functions used in read ini file --------------------------------------------
-//note : these functions are only used in CLI application
-//-----------------------------------------------------------------------------
-int splitint(char *src, char *dlm, int *out, int n)
+// load initial value ----------------------------------------------------------
+extern int loadinit(sdrini_t *ini, const char *filename)
 {
     int i;
-    char *str;
-    for (i=0;i<n;i++) {
-        if ((str=strtok((i==0)?src:NULL,dlm))==NULL) return -1;
-        out[i]=atoi(str);
+    ini->fend = FEND_FRTLSDR;
+    ini->f_cf[0] = 1575.42e6;
+    ini->f_sf[0] = 2.048e6;
+    ini->f_if[0] = 0.0;
+    ini->dtype[0] = 2;
+    ini->f_cf[1] = 0.0;
+    ini->f_sf[1] = 0.0;
+    ini->f_if[1] = 0.0;
+    ini->dtype[1] = 0;
+    strcpy(ini->file1, filename);
+    ini->useif1 = ON;
+    ini->file2[0] = '\0';
+    ini->useif2 = OFF;
+    ini->rtlsdrppmerr = 0;
+    ini->trkcorrn = 4;
+    ini->trkcorrd = 1;
+    ini->trkcorrp = 1;
+    ini->trkdllb[0] = 5.0;
+    ini->trkpllb[0] = 30.0;
+    ini->trkfllb[0] = 200.0;
+    ini->trkdllb[1] = 2.0;
+    ini->trkpllb[1] = 20.0;
+    ini->trkfllb[1] = 50.0;
+    ini->nch = 32;
+    int prn[32] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32};
+    int sys[32] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+    int ctype[32] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+    int ftype[32] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+    for(i=0;i<32;i++) {
+        ini->prn[i] = prn[i];
+        ini->sys[i] = sys[i];
+        ini->ctype[i] = ctype[i];
+        ini->ftype[i] = ftype[i];
     }
-    return 0;
-}
-int splitdouble(char *src, char *dlm, double *out, int n)
-{
-    int i;
-    char *str;
-    for (i=0;i<n;i++) {
-        if ((str=strtok((i==0)?src:NULL,dlm))==NULL) return -1;
-        out[i]=atof(str);
-    }
-    return 0;
-}
-int readiniint(char *file, char *sec, char *key)
-{
-    char str[256];
-    GetPrivateProfileString(sec,key,"",str,256,file);
-    return atoi(str);
-}
-int readiniints(char *file, char *sec, char *key, int *out, int n)
-{
-    char str[256];
-    GetPrivateProfileString(sec,key,"",str,256,file);
-    return splitint(str,",",out,n);
-}
-double readinidouble(char *file, char *sec, char *key)
-{
-    char str[256];
-    GetPrivateProfileString(sec,key,"",str,256,file);
-    return atof(str);
-}
-int readinidoubles(char *file, char *sec, char *key, double *out, int n)
-{
-    char str[256];
-    GetPrivateProfileString(sec,key,"",str,256,file);
-    return splitdouble(str,",",out,n);
-}
-void readinistr(char *file, char *sec, char *key, char *out)
-{
-    GetPrivateProfileString(sec,key,"",out,256,file);
-}
-
-// read ini file --------------------------------------------------------------
-//read ini file and set value to sdrini struct
-//args   : sdrini_t *ini    I/0 sdrini struct
-//return : int                  0:okay -1:error
-//note : this function is only used in CLI application
-//-----------------------------------------------------------------------------
-extern int readinifile(sdrini_t *ini)
-{
-    int i,ret;
-    char inifile[]="./gnss-sdrcli.ini";
-    char fendfile[256],str[256];
-
-    // check ini file   
-    if ((ret=GetFileAttributes(inifile))<0){
-        SDRPRINTF("error: gnss-sdrcli.ini doesn't exist\n");
-        return -1;
-    }
-    // receiver setting   
-    readinistr(inifile,"RCV","FENDCONF",fendfile);
-
-    // check front-end configuration  file   
-    if ((ret=GetFileAttributes(fendfile))<0){
-        SDRPRINTF("error: %s doesn't exist\n",fendfile);
-        return -1;
-    }
-
-    // Read in front end (receiver) file, such as for RTLSDR or BLADERF
-    readinistr(fendfile,"FEND","TYPE",str);
-    if (strcmp(str,"BLADERF")==0)     ini->fend=FEND_BLADERF;
-    else if (strcmp(str,"RTLSDR")==0)     ini->fend=FEND_RTLSDR;
-    else if (strcmp(str,"FILEBLADERF")==0) ini->fend=FEND_FBLADERF;
-    else if (strcmp(str,"FILERTLSDR")==0) ini->fend=FEND_FRTLSDR;
-    else if (strcmp(str,"FILE")==0)       ini->fend=FEND_FILE;
-    else { SDRPRINTF("error: wrong frontend type: %s\n",str); return -1; }
-
-    if (ini->fend==FEND_FILE    ||
-        ini->fend==FEND_FBLADERF||ini->fend==FEND_FRTLSDR) {
-        readinistr(fendfile,"FEND","FILE1",ini->file1);
-        if (strcmp(ini->file1,"")!=0) ini->useif1=ON;
-    }
-    if (ini->fend==FEND_FILE) {
-        readinistr(fendfile,"FEND","FILE2",ini->file2);
-        if (strcmp(ini->file2,"")!=0) ini->useif2=ON;
-    }
-    ini->f_cf[0]=readinidouble(fendfile,"FEND","CF1");
-    ini->f_sf[0]=readinidouble(fendfile,"FEND","SF1");
-    ini->f_if[0]=readinidouble(fendfile,"FEND","IF1");
-    ini->f_gain[0]=readiniint(fendfile,"FEND", "GAIN");
-    ini->f_bias[0]=readiniint(fendfile,"FEND", "BIAS");
-    ini->f_clock[0]=readiniint(fendfile,"FEND", "CLOCK");
-    ini->dtype[0]=readiniint(fendfile,"FEND","DTYPE1");
-    ini->f_cf[1]=readinidouble(fendfile,"FEND","CF2");
-    ini->f_sf[1]=readinidouble(fendfile,"FEND","SF2");
-    ini->f_if[1]=readinidouble(fendfile,"FEND","IF2");
-    ini->f_gain[1]=readiniint(fendfile,"FEND", "GAIN");
-    ini->f_bias[1]=readiniint(fendfile,"FEND", "BIAS");
-    ini->f_clock[1]=readiniint(fendfile,"FEND", "CLOCK");
-    ini->dtype[1]=readiniint(fendfile,"FEND","DTYPE2");
-
-    // RTL-SDR only   
-    ini->rtlsdrppmerr=readiniint(fendfile,"FEND","PPMERR");
-
-    // Tracking parameter setting
-    ini->trkcorrn=readiniint(fendfile,"TRACK","CORRN");
-    ini->trkcorrd=readiniint(fendfile,"TRACK","CORRD");
-    ini->trkcorrp=readiniint(fendfile,"TRACK","CORRP");
-    ini->trkdllb[0]=readinidouble(fendfile,"TRACK","DLLB1");
-    ini->trkpllb[0]=readinidouble(fendfile,"TRACK","PLLB1");
-    ini->trkfllb[0]=readinidouble(fendfile,"TRACK","FLLB1");
-    ini->trkdllb[1]=readinidouble(fendfile,"TRACK","DLLB2");
-    ini->trkpllb[1]=readinidouble(fendfile,"TRACK","PLLB2");
-    ini->trkfllb[1]=readinidouble(fendfile,"TRACK","FLLB2");
-
-    // Read in gnss-sdrcli.ini file
-    // Channel setting
-    ini->nch=readiniint(inifile,"CHANNEL","NCH");
-    if (ini->nch<1) {
-        SDRPRINTF("error: wrong inifile value NCH=%d\n",ini->nch);
-        return -1;
-    }
-    if ((ret=readiniints(inifile,"CHANNEL","PRN",ini->prn,ini->nch))<0 ||
-        (ret=readiniints(inifile,"CHANNEL","SYS",ini->sys,ini->nch))<0 ||
-        (ret=readiniints(inifile,"CHANNEL","CTYPE",ini->ctype,ini->nch))<0 ||
-        (ret=readiniints(inifile,"CHANNEL","FTYPE",ini->ftype,ini->nch))<0) {
-            SDRPRINTF("error: wrong inifile value NCH=%d\n",ini->nch);
-            return -1;
-    }
-
-    // Plot settings
-    ini->pltacq=readiniint(inifile,"PLOT","ACQ");
-    ini->plttrk=readiniint(inifile,"PLOT","TRK");
-
-    // Output setting
-    ini->outms   =readiniint(inifile,"OUTPUT","OUTMS");
-    ini->sbas    =readiniint(inifile,"OUTPUT","SBAS");
-
-    // Spectrum setting
-    ini->pltspec=readiniint(inifile,"SPECTRUM","SPEC");
-
-    // PVT setting
-    if((ret=readiniints(inifile,"PVT","XUINITIAL",ini->xu0_v,3))<0 ) {
-        SDRPRINTF("error: wrong inifile value NCH=%d\n",3);
-        return -1;
-    }
-    readinistr(inifile,"PVT","FONTFILE",ini->fontfile);
-    //printf("FONTFILE: %s\n", ini->fontfile);
-    ini->ekfFilterOn=readiniint(inifile,"PVT","EKFFILTER");
-
-    // SDR channel setting
-    for (i=0;i<sdrini.nch;i++) {
-        if (sdrini.ctype[i]==CTYPE_L1CA) {
-            sdrini.nchL1++;
+    ini->pltacq = 0;
+    ini->plttrk = 0;
+    ini->outms = 200;
+    ini->sbas = 0;
+    ini->pltspec = 0;
+    ini->xu0_v[0] = 693570;
+    ini->xu0_v[1] = -5193930;
+    ini->xu0_v[2] = 3624632;
+    strcpy(ini->fontfile, "/home/donkelly/Documents/GNSS-SDRLIB/GNSS-SDRLIB-DK-WorkingCopy_Dev/src/openSans/OpenSans-Semibold.ttf");
+    ini->ekfFilterOn = 0;
+    ini->nchL1 = 0;
+    for (i=0;i<ini->nch;i++) {
+        if (ini->ctype[i]==1) { // CTYPE_L1CA
+            ini->nchL1++;
         }
     }
     return 0;
@@ -244,13 +93,21 @@ extern int chk_initvalue(sdrini_t *ini)
     // checking filepath   
     if (ini->fend==FEND_FILE   ||
         ini->fend==FEND_FRTLSDR||ini->fend==FEND_FBLADERF) {
-        if (ini->useif1&&((ret=GetFileAttributes(ini->file1))<0)){
-            SDRPRINTF("error: file1 doesn't exist: %s\n",ini->file1);
-            return -1;
+        if (ini->useif1) {
+            FILE *fp = fopen(ini->file1, "r");
+            if (!fp) {
+                SDRPRINTF("error: file1 doesn't exist: %s\n",ini->file1);
+                return -1;
+            }
+            fclose(fp);
         }
-        if (ini->useif2&&((ret=GetFileAttributes(ini->file2))<0)){
-            SDRPRINTF("error: file2 doesn't exist: %s\n",ini->file2);
-            return -1;
+        if (ini->useif2) {
+            FILE *fp = fopen(ini->file2, "r");
+            if (!fp) {
+                SDRPRINTF("error: file2 doesn't exist: %s\n",ini->file2);
+                return -1;
+            }
+            fclose(fp);
         }
         if ((!ini->useif1)&&(!ini->useif2)) {
             SDRPRINTF("error: file1 or file2 are not selected\n");

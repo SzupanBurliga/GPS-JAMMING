@@ -517,7 +517,7 @@ extern void setobsdata(sdrch_t *sdr, uint64_t buffloc, uint64_t cnt,
                        sdrtrk_t *trk, int flag);
 
 // sdrinit.c ------------------------------------------------------------------
-extern int readinifile(sdrini_t *ini);
+extern int loadinit(sdrini_t *ini, const char *filename);
 extern int chk_initvalue(sdrini_t *ini);
 extern void openhandles(void);
 extern void closehandles(void);
