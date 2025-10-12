@@ -1,0 +1,4 @@
+przekminic w jaki sposób wykrywać takowy jammer (może jakaś zmienan boolowa, która zmiania sie zaraz po otrzymaniu locka) cos z tego mozna przekminic
+można też jakoś uwarunkować to przez api pogody, że jeśli pogoda do pizdy to jakaś temperatura wykrywania? (lekko bardziej ambitne)
+
+połączyć jakoś goata do tego, 
