@@ -4,6 +4,9 @@ import re
 import subprocess
 import sys
 import os
+import time
+import threading
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -46,7 +49,6 @@ class App(tk.Tk):
 
         self.entries = []
         self.row_widgets = []  # (label_widget, entry_widget)
-
         self.v_lat_key = (self.register(self._validate_lat_key), "%P")
         self.v_lon_key = (self.register(self._validate_lon_key), "%P")
         self.v_sec_key = (self.register(self._validate_seconds_key), "%P")
@@ -130,10 +132,14 @@ class App(tk.Tk):
         # ---- KONFIG: zakresy 
         self.ALT_MIN = -500.0
         self.ALT_MAX = 20000.0
-
+        
+        # ---- KONFIG: ścieżki
+        base_dir = os.path.dirname(os.path.abspath(__file__))          # → simulate/frontend
+        root_dir = os.path.abspath(os.path.join(base_dir, os.pardir))  # → simulate
+        gps_dir  = os.path.join(root_dir, "gps-sdr-sim")               # → simulate/gps-sdr-sim
+        self.GPS_SDR_SIM_PATH  = os.path.join(gps_dir, "gps-sdr-sim")   # plik binarny
+        self.EPHERIS_FILE_PATH = os.path.join(gps_dir, "brdc2830.25n")  # plik efemeryd
         self.set_basic_defaults()
-
-
 
     def _validate_lat_key(self, P: str) -> bool:
         """LAT: dopuszcza -?, do 2 cyfr + opcjonalna . i do 7 miejsc po kropce (format); zakres sprawdzimy później."""
@@ -231,110 +237,117 @@ class App(tk.Tk):
                 self.jammer_entries[i].delete(0, tk.END)
                 self.jammer_entries[i].insert(0, val)
 
+    def start_btn_state(self, enabled: bool):
+        for child in self.root_frame.grid_slaves(row=5, column=0):
+            if isinstance(child, tk.Button) and child.cget("text") == "START":
+                child.config(state=("normal" if enabled else "disabled"))
+
+    def _run_cmd_thread(self, cmd: list[str], output_filename: str = ""):
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            out = []
+            for line in iter(proc.stdout.readline, ""):
+                if not line and proc.poll() is not None:
+                    break
+                if line:
+                    out.append(line)
+                    print(line.rstrip())
+            rc = proc.wait()
+            if rc == 0:
+                msg = f"Plik został wygenerowany pomyślnie!\n\nNazwa pliku: {output_filename}\nLokalizacja: /frontend/"
+            else:
+                msg = f"Błąd podczas generowania (kod {rc})"
+            
+            self.after(0, lambda: messagebox.showinfo("gps-sdr-sim", f"{msg}\n\n" ))
+        except FileNotFoundError:
+            self.after(0, lambda: messagebox.showerror("Error", f"Nie znaleziono gps-sdr-sim w: {self.GPS_SDR_SIM_PATH}"))
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror("Error", f"Wystąpił wyjątek: {e}"))
+        finally:
+            self.after(0, lambda: self.start_btn_state(True))
+
     def on_start(self):
+        # ---- USTAWIENIA EDYTOWALNE (1 miejsce do zmiany) ----
+        EPHEMERIS_FILE = self.EPHERIS_FILE_PATH         # -e
+        T_STATIONARY   = "2025/10/10,00:00:00"          # -T dla nieruchomego
+        T_MOBILE       = "2025/10/10,00:00:00"          # -T dla ruchomego
+        BITS           = "8"                            # -b
+        SAMPLERATE     = "2048000"                      # -s
+        TRAJ_FILE      = "traj.csv"                     # nazwa tworzonej trajektorii przy ruchomym
+        # -----------------------------------------------------
+
+        # --- Walidacje jak u Ciebie (skrócone tylko do potrzeb tego scenariusza) ---
         base_count = 8 if self.is_ruchomy.get() else 5
         values = [self.entries[i].get().strip() for i in range(base_count)]
         mode = self.mode_var.get()
 
-        # indeksy głównych pól
-        idx_filename = 0
-        idx_seconds  = 1
-        idx_lon_start = 2
-        idx_lat_start = 3
-        idx_alt_start = 4
-        idx_lon_end   = 5
-        idx_lat_end   = 6
-        idx_alt_end   = 7
+        idx_filename   = 0
+        idx_seconds    = 1
+        idx_lon_start  = 2
+        idx_lat_start  = 3
+        idx_alt_start  = 4
+        idx_lon_end    = 5
+        idx_lat_end    = 6
+        idx_alt_end    = 7
 
-        jammer_values = []
-        if mode == "B":
-            jammer_values = [entry.get().strip() for entry in self.jammer_entries]
-
+        # podstawowe sprawdzenia
         filename = values[idx_filename]
-        if not filename or not filename.lower().endswith(".bin"):
+        if not filename.lower().endswith(".bin"):
             messagebox.showerror("Błąd", "Nazwa pliku musi kończyć się na .bin")
-            self.entries[idx_filename].focus_set()
-            return
+            self.entries[idx_filename].focus_set(); return
 
         sec_txt = values[idx_seconds]
         if not sec_txt.isdigit():
             messagebox.showerror("Błąd", "Czas próbki (s) musi być liczbą całkowitą.")
-            self.entries[idx_seconds].focus_set()
-            return
+            self.entries[idx_seconds].focus_set(); return
         seconds = int(sec_txt)
         if not (1 <= seconds <= 86400):
             messagebox.showerror("Błąd", "Czas próbki (s) musi być w zakresie 1..86400.")
-            self.entries[idx_seconds].focus_set()
-            return
+            self.entries[idx_seconds].focus_set(); return
 
         if not self._lon_in_range(values[idx_lon_start]):
-            messagebox.showerror("Błąd", "Długość geograficzna (start) musi być w zakresie −180..180, max 7 miejsc po przecinku.")
-            self.entries[idx_lon_start].focus_set()
-            return
+            messagebox.showerror("Błąd", "Długość geograficzna (start) musi być w zakresie −180..180.")
+            self.entries[idx_lon_start].focus_set(); return
         if not self._lat_in_range(values[idx_lat_start]):
-            messagebox.showerror("Błąd", "Szerokość geograficzna (start) musi być w zakresie −90..90, max 7 miejsc po przecinku.")
-            self.entries[idx_lat_start].focus_set()
-            return
+            messagebox.showerror("Błąd", "Szerokość geograficzna (start) musi być w zakresie −90..90.")
+            self.entries[idx_lat_start].focus_set(); return
         if not self._alt_in_range(values[idx_alt_start]):
-            messagebox.showerror("Błąd", f"Wysokość (start) musi być liczbą w zakresie {self.ALT_MIN}..{self.ALT_MAX} m.")
-            self.entries[idx_alt_start].focus_set()
+            messagebox.showerror("Błąd", f"Wysokość (start) musi być w zakresie {self.ALT_MIN}..{self.ALT_MAX} m.")
+            self.entries[idx_alt_start].focus_set(); return
+
+        # tylko tryb A uruchamia gps-sdr-sim
+        if mode != "A":
+            messagebox.showwarning("Uwaga", "gps-sdr-sim uruchamiany jest tylko w trybie 'Bez zakłóceń'.")
             return
 
-        if self.is_ruchomy.get():
-            if not self._lon_in_range(values[idx_lon_end]):
-                messagebox.showerror("Błąd", "Długość geograficzna (końcowa) musi być w zakresie −180..180, max 7 miejsc po przecinku.")
-                self.entries[idx_lon_end].focus_set()
-                return
-            if not self._lat_in_range(values[idx_lat_end]):
-                messagebox.showerror("Błąd", "Szerokość geograficzna (końcowa) musi być w zakresie −90..90, max 7 miejsc po przecinku.")
-                self.entries[idx_lat_end].focus_set()
-                return
-            if not self._alt_in_range(values[idx_alt_end]):
-                messagebox.showerror("Błąd", f"Wysokość (końcowa) musi być liczbą w zakresie {self.ALT_MIN}..{self.ALT_MAX} m.")
-                self.entries[idx_alt_end].focus_set()
-                return
+        # prosta walidacja -T (YYYY/MM/DD,hh:mm:ss)
+        TIMEREG = re.compile(r"^\d{4}/\d{2}/\d{2},\d{2}:\d{2}:\d{2}$")
+        t_stationary = T_STATIONARY if TIMEREG.match(T_STATIONARY) else "2025/10/10,00:00:00"
+        t_mobile     = T_MOBILE     if TIMEREG.match(T_MOBILE)     else "2025/10/10,00:00:00"
 
-        if mode == "B":  # Jammer
-            if not self._lon_in_range(jammer_values[0]):  # Długość geograficzna jammera
-                messagebox.showerror("Błąd", "Długość geograficzna jammera musi być w zakresie −180..180, max 7 miejsc po przecinku.")
-                self.jammer_entries[0].focus_set()
-                return
-            if not self._lat_in_range(jammer_values[1]):  # Szerokość geograficzna jammera
-                messagebox.showerror("Błąd", "Szerokość geograficzna jammera musi być w zakresie −90..90, max 7 miejsc po przecinku.")
-                self.jammer_entries[1].focus_set()
-                return
-            if not self._range_in_range(jammer_values[2]):  # Zasięg jammera
-                messagebox.showerror("Błąd", "Zasięg jammera musi być liczbą dodatnią w zakresie 0-100 metrów.")
-                self.jammer_entries[2].focus_set()
-                return
-
-        if not mode:
-            messagebox.showwarning("Uwaga", "Wybierz tryb!")
-            return
-
-        message = f"Startuję z wartościami:\nInputy: {values}\nTryb: {mode}\n"
-        if mode == "B" and jammer_values:
-            message += f"Jammer: {jammer_values}\n"
-        
-            # Zbuduj argumenty dla skryptu trybu A/B/C (jeśli ich używasz)
-        mode_args = [
-            "--filename", values[idx_filename],
-            "--seconds",  str(seconds),
-            "--lon",      values[idx_lon_start],
-            "--lat",      values[idx_lat_start],
-            "--alt",      values[idx_alt_start],
-        ]
-
-        if mode == "B":  # Jammer
-            mode_args += [
-                "--jammer-lon",   self.jammer_entries[0].get().strip(),
-                "--jammer-lat",   self.jammer_entries[1].get().strip(),
-                "--jammer-range", self.jammer_entries[2].get().strip(),
+        # budujemy komendę zależnie od ruchomy/nie
+        if not self.is_ruchomy.get():
+            # NIERUCHOMY → -l lat,lon,alt
+            lat = values[idx_lat_start]
+            lon = values[idx_lon_start]
+            alt = values[idx_alt_start]
+            cmd = [
+                self.GPS_SDR_SIM_PATH,
+                "-e", self.EPHERIS_FILE_PATH,
+                "-l", f"{lat},{lon},{alt}",
+                "-b", BITS,
+                "-d", str(seconds),
+                "-T", t_stationary,
+                "-o", filename,
+                "-s", SAMPLERATE,
+                "-v"
             ]
-
-        trajectory_path = None
-        if self.is_ruchomy.get():
-            trajectory_path = self.run_generate_trajectory(
+            self.start_btn_state(False)
+            threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
+            return
+        else:
+            # RUCHOMY → wygeneruj traj.csv, następnie -u traj.csv
+            traj_path = self.run_generate_trajectory(
                 start_lat=values[idx_lat_start],
                 start_lon=values[idx_lon_start],
                 start_alt=values[idx_alt_start],
@@ -343,17 +356,25 @@ class App(tk.Tk):
                 end_alt=values[idx_alt_end],
                 duration_s=seconds,
                 step_s=0.1,
-                out_file="traj.csv"
+                out_file=TRAJ_FILE
             )
-            if trajectory_path is None:
-                return  # błąd generowania trajektorii
+            if traj_path is None:
+                return  # błąd pokazany w run_generate_trajectory
 
-            # <<< DOPNIJ TRAJEKTORIĘ DO ARGUMENTÓW >>>
-            mode_args += ["--trajectory", trajectory_path]
-
-        # Tu już BEZ keyword argumentu:
-        self.run_mode_script(mode, mode_args)
-
+            cmd = [
+                self.GPS_SDR_SIM_PATH,
+                "-e", self.EPHERIS_FILE_PATH,
+                "-u", traj_path,
+                "-b", BITS,
+                "-d", str(seconds),
+                "-T", t_mobile,
+                "-o", filename,
+                "-s", SAMPLERATE,
+                "-v"
+            ]
+            self.start_btn_state(False)
+            threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
+            return
 
 
     # pomocnicze
@@ -459,7 +480,7 @@ class App(tk.Tk):
         ]
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            messagebox.showinfo("Trajektoria OK", f"Wygenerowano {out_file}.\n\n{res.stdout}")
+            messagebox.showinfo("Trajektoria OK", f"Wygenerowano {out_file}")
             return out_file
         except subprocess.CalledProcessError as e:
             messagebox.showerror("Błąd trajektorii", f"generate_trajectory.py zwrócił błąd:\n{e.stderr}")

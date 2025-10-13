@@ -46,7 +46,7 @@ def linear_trajectory(start_lat, start_lon, start_alt,
         alt = start_alt + (end_alt - start_alt) * frac
 
         x, y, z = lla_to_ecef(lat, lon, alt)
-        rows.append([int(round(t)), f"{x:.3f}", f"{y:.3f}", f"{z:.3f}"])
+        rows.append([f"{t:.1f}", f"{x:.3f}", f"{y:.3f}", f"{z:.3f}"])
 
     with open(out_file, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
