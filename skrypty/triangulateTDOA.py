@@ -10,7 +10,7 @@ FILE_ANT0 = '17_10/capture1710_0_15m.bin'
 FILE_ANT1 = '17_10/capture1710_1.bin'
 
 # 2. Parametry odbiornika
-SAMPLE_RATE = 2.4e6  # Częstotliwość próbkowania [Hz]
+SAMPLE_RATE = 2048000  # Częstotliwość próbkowania [Hz]
 CENTER_FREQ = 1575420000  # Częstotliwość środkowa [Hz]
 
 # 3. Położenie anten (w metrach, w kartezjańskim układzie współrzędnych)
@@ -123,4 +123,5 @@ if __name__ == "__main__":
     print(f"Kąt nadejścia fali interferencyjnej (względem osi anten): {math.degrees(theta):.2f} stopni")
     print(f"Potencjalne kierunki do źródła interferencji (azymuty):")
     print(f"  Kierunek 1: {azimuth1_deg:.2f} stopni")
+
     print(f"  Kierunek 2: {azimuth2_deg:.2f} stopni")
