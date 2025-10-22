@@ -7,7 +7,6 @@ import os
 import time
 import threading
 
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -39,11 +38,11 @@ class App(tk.Tk):
         self.label_names = [
             "Nazwa pliku (.bin):",
             "Czas próbki (s):",
-            "Długość geograficzna:",
             "Szerokość geograficzna:",
+            "Długość geograficzna:",
             "Wysokość (m n.p.m.):",
-            "Długość geograficzna (końcowa):",
             "Szerokość geograficzna (końcowa):",
+            "Długość geograficzna (końcowa):",
             "Wysokość (m n.p.m.) – końcowa:",
         ]
 
@@ -63,9 +62,9 @@ class App(tk.Tk):
                 ent = tk.Entry(self.form, width=40, validate="focusout", validatecommand=self.v_file_focusout)
             elif r == 1:
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_sec_key)
-            elif r in (3, 6): 
-                ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_lat_key)
             elif r in (2, 5): 
+                ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_lat_key)
+            elif r in (3, 6): 
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_lon_key)
             elif r in (4, 7): 
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_alt_key)
@@ -91,10 +90,6 @@ class App(tk.Tk):
             tk.Radiobutton(radios, text=text, variable=self.mode_var, value=value)\
                 .grid(row=0, column=i, padx=(0 if i == 0 else 16, 0), sticky="w")
 
-        # ===================================================================
-        # ZMIANA START
-        # ===================================================================
-        
         # panel jammera
         self.jammer_frame = tk.Frame(self.root_frame)
         self.jammer_frame.grid(row=4, column=0, pady=(16,8), sticky="w")
@@ -102,9 +97,9 @@ class App(tk.Tk):
         self.jammer_frame.columnconfigure(1, weight=1)
 
         # Pola jammera (tak jak były)
-        self.jammer_labels = [
-            "Długość geograficzna jammera:",
+        self.jammer_labels = [           
             "Szerokość geograficzna jammera:",
+            "Długość geograficzna jammera:",
             "Zasięg jammera (m):"
         ]
         
@@ -115,9 +110,9 @@ class App(tk.Tk):
             lbl = tk.Label(self.jammer_frame, text=name, width=28, anchor="e")
             
             if r == 0:
-                ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_lon_key)
-            elif r == 1:
                 ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_lat_key)
+            elif r == 1:
+                ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_lon_key)
             elif r == 2:
                 ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_range_key)
             
@@ -126,10 +121,8 @@ class App(tk.Tk):
             self.jammer_entries.append(ent)
             self.jammer_widgets.append((lbl, ent))
 
-        # Zmienna do przechowywania wybranego typu jammera
-        self.jammer_type_var = tk.StringVar(value="BB") # Domyślnie zaznaczony pierwszy
+        self.jammer_type_var = tk.StringVar(value="BB") 
 
-        # Lista typów jammera (etykieta, wartość)
         jammer_types = [
             ("Szum szerokopasmowy (Broadband Noise)", "BB"),
             ("Sygnał o stałej fali (Continuous Wave - CW)", "CW"),
@@ -137,14 +130,12 @@ class App(tk.Tk):
             ("Jammer impulsowy (Pulsed Jammer)", "PULSED")
         ]
 
-        # Ramka na przyciski Radiobutton
         jammer_radios_frame = tk.Frame(self.jammer_frame)
         jammer_radios_frame.grid(row=3, column=0, columnspan=2, pady=(10,0), sticky="w")
 
         tk.Label(jammer_radios_frame, text="Typ jammera:", font=("Arial", 10, "bold"))\
             .grid(row=0, column=0, sticky="w", pady=(0, 5))
 
-        # Tworzenie przycisków Radiobutton jeden pod drugim
         for i, (text, value) in enumerate(jammer_types):
             tk.Radiobutton(
                 jammer_radios_frame,
@@ -152,10 +143,6 @@ class App(tk.Tk):
                 variable=self.jammer_type_var,
                 value=value
             ).grid(row=i + 1, column=0, sticky="w", padx=(10, 0))
-
-        # ===================================================================
-        # ZMIANA KONIEC
-        # ===================================================================
 
         self.jammer_frame.grid_remove()
         tk.Button(self.root_frame, text="START", bg="#4CAF50", fg="white",
@@ -244,12 +231,12 @@ class App(tk.Tk):
         defaults = [
             "test.bin",
             "90",
+            "19.9000000",
             "50.0000000",
-            "19.9000000",
             "350.0",
-            "50.0001000",
-            "19.9000000",
-            "390.0",
+            "50.0000000",
+            "19.9080000",
+            "350.0",
         ]
         for i, val in enumerate(defaults):
             if i < len(self.entries):
@@ -295,18 +282,15 @@ class App(tk.Tk):
         finally:
             self.after(0, lambda: self.start_btn_state(True))
 
-    # Funkcja on_jammer_button została usunięta,
-    # ponieważ logika jest teraz w on_start
 
     def on_start(self):
-        # ---- USTAWIENIA EDYTOWALNE ----
+        # ustawienia na twardo wpisywane
         EPHEMERIS_FILE = self.EPHERIS_FILE_PATH
         T_STATIONARY   = "2025/10/10,00:00:00"
         T_MOBILE       = "2025/10/10,00:00:00"
         BITS           = "8"
-        SAMPLERATE     = "3182239"
+        SAMPLERATE     = "2048000"
         TRAJ_FILE      = "traj.csv"
-        # -------------------------------
 
         base_count = 8 if self.is_ruchomy.get() else 5
         values = [self.entries[i].get().strip() for i in range(base_count)]
@@ -318,11 +302,11 @@ class App(tk.Tk):
 
         idx_filename   = 0
         idx_seconds    = 1
-        idx_lon_start  = 2
-        idx_lat_start  = 3
+        idx_lat_start  = 2
+        idx_lon_start  = 3
         idx_alt_start  = 4
-        idx_lon_end    = 5
-        idx_lat_end    = 6
+        idx_lat_end    = 5
+        idx_lon_end    = 6
         idx_alt_end    = 7
 
         # Walidacja podstawowych pól (wspólna dla wszystkich trybów)
@@ -361,12 +345,10 @@ class App(tk.Tk):
                 messagebox.showerror("Błąd", f"Wysokość (końcowa) musi być w zakresie {self.ALT_MIN}..{self.ALT_MAX} m.")
                 self.entries[idx_alt_end].focus_set(); return
 
-        # Logika specyficzna dla trybu
         TIMEREG = re.compile(r"^\d{4}/\d{2}/\d{2},\d{2}:\d{2}:\d{2}$")
         t_stationary = T_STATIONARY if TIMEREG.match(T_STATIONARY) else "2025/10/10,00:00:00"
         t_mobile     = T_MOBILE     if TIMEREG.match(T_MOBILE)     else "2025/10/10,00:00:00"
 
-        # Tryb A: Bez zakłóceń (uruchamia gps-sdr-sim)
         if mode == "A":
             if not self.is_ruchomy.get():
                 lat = values[idx_lat_start]
@@ -414,12 +396,11 @@ class App(tk.Tk):
                 self.start_btn_state(False)
                 threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
         
-        # Tryb B: Jammer (uruchamia skrypt mode_b.py)
         elif mode == "B":
-            # 1. Walidacja pól jammera
+            # walidacja pól jammera
             try:
-                jammer_lon = self.jammer_entries[0].get().strip()
-                jammer_lat = self.jammer_entries[1].get().strip()
+                jammer_lat = self.jammer_entries[0].get().strip()
+                jammer_lon = self.jammer_entries[1].get().strip()
                 jammer_range = self.jammer_entries[2].get().strip()
             except IndexError:
                 messagebox.showerror("Błąd", "Nie można odnaleźć pól jammera.")
@@ -434,11 +415,8 @@ class App(tk.Tk):
             if not self._range_in_range(jammer_range): # TODO: Upewnij się, że ta walidacja jest poprawna
                 messagebox.showerror("Błąd", "Zasięg jammera jest nieprawidłowy (musi być > 0).")
                 self.jammer_entries[2].focus_set(); return
-            
-            # 2. Pobranie typu jammera
             jammer_type = self.jammer_type_var.get()
-            
-            # 3. Wyświetlenie komunikatu (lub uruchomienie skryptu)
+
             messagebox.showinfo("Start - Tryb Jammer", 
                                 f"Plik: {filename}\n"
                                 f"Czas: {seconds}s\n"
@@ -447,22 +425,11 @@ class App(tk.Tk):
                                 f"Lokalizacja jammera: {jammer_lat}, {jammer_lon}\n"
                                 f"Zasięg: {jammer_range}m")
             
-            # 4. Przygotowanie argumentów i uruchomienie skryptu
-            # Kolejność argumentów musi być zgodna z tym, czego oczekuje mode_b.py
-            # Poniżej przykład:
-            # script_args = values + [jammer_lat, jammer_lon, jammer_range, jammer_type]
-            # self.run_mode_script("B", script_args)
-            
             print(f"Uruchamianie trybu B (Jammer) z typem: {jammer_type}")
-            # Odkomentuj poniższą linię, aby uruchomić skrypt
-            # self.run_mode_script("B", values + [jammer_lat, jammer_lon, jammer_range, jammer_type])
 
-        # Tryb C: Spoofer
         elif mode == "C":
             messagebox.showinfo("Start - Tryb Spoofer", 
                                 "Tryb Spoofer nie jest jeszcze zaimplementowany.")
-            # Analogicznie można by tu dodać walidację pól spoofera i wywołanie
-            # self.run_mode_script("C", args)
 
     # pomocnicze
     def _has_max_7_decimals(self, s: str) -> bool:
@@ -510,7 +477,6 @@ class App(tk.Tk):
             if text.strip() == "":
                 return False
             val = float(text)
-            # Ustawiamy prostą walidację: zasięg musi być liczbą dodatnią
             return val > 0.0
         except ValueError:
             return False
