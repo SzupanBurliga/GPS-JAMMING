@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from haversine import haversine, Unit  # Wciąż potrzebne dla Trybu Statycznego
+from haversine import haversine, Unit
 import os.path
 import math
 
@@ -13,17 +13,21 @@ JAMMER_SIGNAL_FILE = 'test_jammer.bin'
 OUTPUT_FILE = 'final_output_z_zagluszeniem.bin'
 
 # ustawienia jammera
-JAMMER_MAX_RANGE_METERS = 15.0  # Zasięg 15 metrów
-JAMMER_LOCATION = (50.0000000, 19.904000, 350.0) 
-# moc jammera w miejscu gdzie jammuje 
+JAMMER_MAX_RANGE_METERS = 400.0  # Maksymalny zasięg, po którym moc = 0 (promień jammera)
+JAMMER_LOCATION = (50.00000000,19.9040000,350.0) 
 
-DYNAMIC_JAMMER_POWER = 1.0 
-STATIC_JAMMER_POWER = 1.0 
+DYNAMIC_JAMMER_POWER = 1.0 # Moc jammera przy dystansie referencyjnym
+STATIC_JAMMER_POWER = 1.0  # Moc jammera przy dystansie referencyjnym
+
+# --- NOWA ZMIENNA: Dystans referencyjny dla modelu FSL ---
+# Definiuje odległość, przy której moc jammera jest maksymalna (równa DYNAMIC/STATIC_JAMMER_POWER).
+# Zapobiega to dzieleniu przez zero i nieskończonej mocy, gdy odległość -> 0.
+FSL_REFERENCE_DISTANCE_METERS = 1.0 
+
 # ustawienia trybu statycznego (brak traj.csv)
-
 DELAY_SECONDS = 80      
 DURATION_SECONDS = 10    
-STATIC_RECEIVER_LOCATION = (50.000000, 19.900000, 220.0)
+STATIC_RECEIVER_LOCATION = (50.0000000, 19.9003000, 220.0)
 
 
 def latlon_to_ecef(lat, lon, alt):
@@ -52,13 +56,14 @@ jammer_power_profile = np.zeros_like(gps_slaby)
 if os.path.exists(GPS_TRAJ_FILE):
 
     # --- TRYB 1: DYNAMICZNY (plik traj.csv istnieje) ---
+    print("Tryb DYNAMICZNY (FSL). Wczytuję plik trajektorii...")
     JAMMER_ECEF = latlon_to_ecef(JAMMER_LOCATION[0], JAMMER_LOCATION[1], JAMMER_LOCATION[2])
     try:
         traj_df = pd.read_csv(GPS_TRAJ_FILE, header=None, names=['time', 'x', 'y', 'z'])
     except Exception as e:
+        print(f"Błąd wczytywania pliku trajektorii: {e}")
         exit()
     
-
     # logika obliczania profilu mocy jammera na podstawie trajektorii
     power_profile_per_timestep = [] 
     for index, row in traj_df.iterrows():
@@ -68,16 +73,31 @@ if os.path.exists(GPS_TRAJ_FILE):
             (receiver_ecef[1] - JAMMER_ECEF[1])**2 +
             (receiver_ecef[2] - JAMMER_ECEF[2])**2
         )
+        
+        # --- NOWA LOGIKA: Model Free Space Loss (FSL) ---
         if total_distance > JAMMER_MAX_RANGE_METERS:
-            power_scale = 0.0  # Poza zasięgiem
+            power_scale = 0.0  # Poza zdefiniowanym zasięgiem
+        elif total_distance < FSL_REFERENCE_DISTANCE_METERS:
+            # W "polu bliskim" (poniżej dystansu referencyjnego) ustawiamy moc maksymalną
+            power_scale = DYNAMIC_JAMMER_POWER 
         else:
-            power_scale = DYNAMIC_JAMMER_POWER * (1.0 - (total_distance / JAMMER_MAX_RANGE_METERS))
+            # Model FSL (prawo odwrotnych kwadratów): Moc ~ 1/d^2
+            # Skalujemy moc tak, aby była równa DYNAMIC_JAMMER_POWER 
+            # przy odległości FSL_REFERENCE_DISTANCE_METERS.
+            power_scale = DYNAMIC_JAMMER_POWER * (FSL_REFERENCE_DISTANCE_METERS / total_distance)**2
+        # --- KONIEC NOWEJ LOGIKI FSL ---
+
+        # === STARA LOGIKA (Kwadratowa) ===
+        # if total_distance > JAMMER_MAX_RANGE_METERS:
+        #     power_scale = 0.0  # Poza zasięgiem
+        # else:
+        #     # Używamy formuły kwadratowej
+        #     power_scale = DYNAMIC_JAMMER_POWER * (1.0 - (total_distance / JAMMER_MAX_RANGE_METERS)**2)
+        # === KONIEC STAREJ LOGIKI ===
     
         power_profile_per_timestep.append(power_scale)
 
 
-
-    
     try:
         time_step = traj_df['time'].iloc[1] - traj_df['time'].iloc[0]
     except IndexError:
@@ -85,16 +105,39 @@ if os.path.exists(GPS_TRAJ_FILE):
     samples_per_timestep = int(SAMPLING_RATE * 2 * time_step) 
 
     if samples_per_timestep == 0:
+        print("Błąd: samples_per_timestep wynosi 0. Sprawdź plik trajektorii lub SAMPLING_RATE.")
         exit()
-    try:
-        dynamic_jammer_power = np.repeat(power_profile_per_timestep, samples_per_timestep).astype(np.float32)
-    except ValueError as e:
-        exit()
+
+    # --- LOGIKA: PŁYNNA INTERPOLACJA MOCY (zamiast np.repeat) ---
+    print("Obliczam płynny profil mocy (interpolacja liniowa)...")
+    all_power_segments = []
+    
+    for i in range(len(power_profile_per_timestep) - 1):
+        p_start = power_profile_per_timestep[i]
+        p_end = power_profile_per_timestep[i+1]
+        
+        segment = np.linspace(p_start, p_end, samples_per_timestep, dtype=np.float32, endpoint=False) 
+        all_power_segments.append(segment)
+
+    if power_profile_per_timestep:
+        last_power_value = power_profile_per_timestep[-1]
+        last_segment = np.full(samples_per_timestep, last_power_value, dtype=np.float32)
+        all_power_segments.append(last_segment)
+
+    if all_power_segments:
+         dynamic_jammer_power = np.concatenate(all_power_segments).astype(np.float32)
+    else:
+         dynamic_jammer_power = np.array([], dtype=np.float32) 
+    # --- KONIEC LOGIKI INTERPOLACJI ---
+
 
     profile_len = min(len(dynamic_jammer_power), len(jammer_power_profile))
     jammer_power_profile[:profile_len] = jammer_data[:profile_len] * dynamic_jammer_power[:profile_len]
+
 # dla braku traj.csv (tryb statyczny)
 else:
+    # --- TRYB 2: STATYCZNY (plik traj.csv nie istnieje) ---
+    print("Tryb STATYCZNY (FSL). Brak pliku traj.csv.")
     jammer_coords_2d = (JAMMER_LOCATION[0], JAMMER_LOCATION[1])
     receiver_coords_2d = (STATIC_RECEIVER_LOCATION[0], STATIC_RECEIVER_LOCATION[1])
 
@@ -102,12 +145,25 @@ else:
     distance_alt = abs(JAMMER_LOCATION[2] - STATIC_RECEIVER_LOCATION[2])
     total_distance = np.sqrt(distance_2d**2 + distance_alt**2)
     
+    print(f"Odległość odbiornika od jammera: {total_distance:.2f} metrów.")
+
     if total_distance > JAMMER_MAX_RANGE_METERS:
-        print(f"Jammer nie zostanie dodany.")
+        print(f"Odbiornik poza zasięgiem ({JAMMER_MAX_RANGE_METERS}m). Jammer nie zostanie dodany.")
     else:
-        # Oblicz moc na podstawie odległości
-        power_scale = STATIC_JAMMER_POWER * (1.0 - (total_distance / JAMMER_MAX_RANGE_METERS))
-        print(f"Odbiornik W ZASIĘGU. Obliczona moc jammera: {power_scale*100:.1f}%")
+        # --- NOWA LOGIKA: Model Free Space Loss (FSL) ---
+        if total_distance < FSL_REFERENCE_DISTANCE_METERS:
+            # W "polu bliskim" (poniżej dystansu referencyjnego) ustawiamy moc maksymalną
+            power_scale = STATIC_JAMMER_POWER
+        else:
+            # Model FSL (prawo odwrotnych kwadratów)
+            power_scale = STATIC_JAMMER_POWER * (FSL_REFERENCE_DISTANCE_METERS / total_distance)**2
+        # --- KONIEC NOWEJ LOGIKI FSL ---
+
+        # === STARA LOGIKA (Kwadratowa) ===
+        # power_scale = STATIC_JAMMER_POWER * (1.0 - (total_distance / JAMMER_MAX_RANGE_METERS)**2)
+        # === KONIEC STAREJ LOGIKI ===
+        
+        print(f"Odbiornik W ZASIĘGU. Obliczona moc jammera (FSL): {power_scale*100:.1f}%")
             
         start_index = int(SAMPLING_RATE * DELAY_SECONDS * 2)
         duration_samples = int(SAMPLING_RATE * DURATION_SECONDS * 2)
@@ -125,13 +181,17 @@ else:
     # -----------------------------------------------------------------
 
 
-
+# --- Łączenie i zapisywanie sygnału ---
+print("Łączenie sygnału GPS i jammera...")
 sygnal_wynikowy_float = gps_slaby + jammer_power_profile
 
+# Normalizacja i konwersja
+# Klipowanie do zakresu int8 (float)
 sygnal_wynikowy_float = np.clip(sygnal_wynikowy_float, -128.0, 127.0)
-final_signal_int8 = sygnal_wynikowy_float.astype(np.float32) 
-
+# Konwersja na int16, przesunięcie do uint8 (0-255)
 final_signal_uint8 = (sygnal_wynikowy_float.astype(np.int16) + 128).astype(np.uint8)
 
+print(f"Zapisywanie pliku wynikowego: {OUTPUT_FILE}")
 final_signal_uint8.tofile(OUTPUT_FILE)
 
+print("Gotowe.")

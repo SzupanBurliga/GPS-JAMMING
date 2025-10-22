@@ -230,9 +230,9 @@ class App(tk.Tk):
         """Ustawia domyślne wartości w polach formularza"""
         defaults = [
             "test.bin",
-            "90",
-            "19.9000000",
+            "120",
             "50.0000000",
+            "19.9000000",
             "350.0",
             "50.0000000",
             "19.9080000",
