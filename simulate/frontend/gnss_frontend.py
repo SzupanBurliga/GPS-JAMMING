@@ -425,6 +425,13 @@ class App(tk.Tk):
                                 f"Lokalizacja jammera: {jammer_lat}, {jammer_lon}\n"
                                 f"Zasięg: {jammer_range}m")
             
+            script_map = {
+                "Chirp Jammer": "chirp_jammer.py",
+                "Pulsed Jammer": "pulsed_jammer.py",
+                "Continuous Wave - CW": "cw_jammer.py",
+                "Broadband Noise": "broadband_jammer.py"
+            }
+            
             print(f"Uruchamianie trybu B (Jammer) z typem: {jammer_type}")
 
         elif mode == "C":

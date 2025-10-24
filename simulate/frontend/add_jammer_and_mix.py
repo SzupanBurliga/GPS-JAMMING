@@ -13,16 +13,17 @@ JAMMER_SIGNAL_FILE = 'test_jammer.bin'
 OUTPUT_FILE = 'final_output_z_zagluszeniem.bin'
 
 # ustawienia jammera
-JAMMER_MAX_RANGE_METERS = 400.0  # Maksymalny zasięg, po którym moc = 0 (promień jammera)
+JAMMER_MAX_RANGE_METERS = 100.0  # Maksymalny zasięg, po którym moc = 0 (promień jammera)
 JAMMER_LOCATION = (50.00000000,19.9040000,350.0) 
 
 DYNAMIC_JAMMER_POWER = 1.0 # Moc jammera przy dystansie referencyjnym
 STATIC_JAMMER_POWER = 1.0  # Moc jammera przy dystansie referencyjnym
 
-# --- NOWA ZMIENNA: Dystans referencyjny dla modelu FSL ---
-# Definiuje odległość, przy której moc jammera jest maksymalna (równa DYNAMIC/STATIC_JAMMER_POWER).
-# Zapobiega to dzieleniu przez zero i nieskończonej mocy, gdy odległość -> 0.
-FSL_REFERENCE_DISTANCE_METERS = 1.0 
+# --- ZMIANA: Skalibrowany dystans referencyjny dla Amplitudy (1/d) ---
+# Aby uzyskać efektywny zasięg 300m (gdzie A_jammer = A_gps),
+# kalibrujemy dystans referencyjny: R_ref = 300m * 0.05 (GPS_WEAKEN_SCALE) = 15.0m
+# W zakresie 0-15m amplituda będzie 100% (DYNAMIC_JAMMER_POWER).
+AMPLITUDE_REFERENCE_DISTANCE_METERS = 15.0 
 
 # ustawienia trybu statycznego (brak traj.csv)
 DELAY_SECONDS = 80      
@@ -56,7 +57,7 @@ jammer_power_profile = np.zeros_like(gps_slaby)
 if os.path.exists(GPS_TRAJ_FILE):
 
     # --- TRYB 1: DYNAMICZNY (plik traj.csv istnieje) ---
-    print("Tryb DYNAMICZNY (FSL). Wczytuję plik trajektorii...")
+    print("Tryb DYNAMICZNY (Realistyczny model 1/d). Wczytuję plik trajektorii...")
     JAMMER_ECEF = latlon_to_ecef(JAMMER_LOCATION[0], JAMMER_LOCATION[1], JAMMER_LOCATION[2])
     try:
         traj_df = pd.read_csv(GPS_TRAJ_FILE, header=None, names=['time', 'x', 'y', 'z'])
@@ -74,26 +75,17 @@ if os.path.exists(GPS_TRAJ_FILE):
             (receiver_ecef[2] - JAMMER_ECEF[2])**2
         )
         
-        # --- NOWA LOGIKA: Model Free Space Loss (FSL) ---
+        # --- ZMIANA: Realistyczny model spadku Amplitudy (1/d) ---
         if total_distance > JAMMER_MAX_RANGE_METERS:
-            power_scale = 0.0  # Poza zdefiniowanym zasięgiem
-        elif total_distance < FSL_REFERENCE_DISTANCE_METERS:
-            # W "polu bliskim" (poniżej dystansu referencyjnego) ustawiamy moc maksymalną
+            power_scale = 0.0  # Poza zdefiniowanym zasięgiem (300m)
+        elif total_distance < AMPLITUDE_REFERENCE_DISTANCE_METERS:
+            # W "polu bliskim" (0-15m) ustawiamy moc maksymalną
             power_scale = DYNAMIC_JAMMER_POWER 
         else:
-            # Model FSL (prawo odwrotnych kwadratów): Moc ~ 1/d^2
-            # Skalujemy moc tak, aby była równa DYNAMIC_JAMMER_POWER 
-            # przy odległości FSL_REFERENCE_DISTANCE_METERS.
-            power_scale = DYNAMIC_JAMMER_POWER * (FSL_REFERENCE_DISTANCE_METERS / total_distance)**2
-        # --- KONIEC NOWEJ LOGIKI FSL ---
-
-        # === STARA LOGIKA (Kwadratowa) ===
-        # if total_distance > JAMMER_MAX_RANGE_METERS:
-        #     power_scale = 0.0  # Poza zasięgiem
-        # else:
-        #     # Używamy formuły kwadratowej
-        #     power_scale = DYNAMIC_JAMMER_POWER * (1.0 - (total_distance / JAMMER_MAX_RANGE_METERS)**2)
-        # === KONIEC STAREJ LOGIKI ===
+            # Realistyczny model spadku AMPLITUDY (prawo 1/d)
+            # Używamy wykładnika **1 (zamiast **2 dla mocy)
+            power_scale = DYNAMIC_JAMMER_POWER * (AMPLITUDE_REFERENCE_DISTANCE_METERS / total_distance)**1
+        # --- KONIEC ZMIENIONEJ LOGIKI ---
     
         power_profile_per_timestep.append(power_scale)
 
@@ -137,7 +129,7 @@ if os.path.exists(GPS_TRAJ_FILE):
 # dla braku traj.csv (tryb statyczny)
 else:
     # --- TRYB 2: STATYCZNY (plik traj.csv nie istnieje) ---
-    print("Tryb STATYCZNY (FSL). Brak pliku traj.csv.")
+    print("Tryb STATYCZNY (Realistyczny model 1/d). Brak pliku traj.csv.")
     jammer_coords_2d = (JAMMER_LOCATION[0], JAMMER_LOCATION[1])
     receiver_coords_2d = (STATIC_RECEIVER_LOCATION[0], STATIC_RECEIVER_LOCATION[1])
 
@@ -150,20 +142,18 @@ else:
     if total_distance > JAMMER_MAX_RANGE_METERS:
         print(f"Odbiornik poza zasięgiem ({JAMMER_MAX_RANGE_METERS}m). Jammer nie zostanie dodany.")
     else:
-        # --- NOWA LOGIKA: Model Free Space Loss (FSL) ---
-        if total_distance < FSL_REFERENCE_DISTANCE_METERS:
-            # W "polu bliskim" (poniżej dystansu referencyjnego) ustawiamy moc maksymalną
+        # --- ZMIANA: Realistyczny model spadku Amplitudy (1/d) ---
+        if total_distance < AMPLITUDE_REFERENCE_DISTANCE_METERS:
+            # W "polu bliskim" (0-15m) ustawiamy moc maksymalną
             power_scale = STATIC_JAMMER_POWER
         else:
-            # Model FSL (prawo odwrotnych kwadratów)
-            power_scale = STATIC_JAMMER_POWER * (FSL_REFERENCE_DISTANCE_METERS / total_distance)**2
-        # --- KONIEC NOWEJ LOGIKI FSL ---
-
-        # === STARA LOGIKA (Kwadratowa) ===
-        # power_scale = STATIC_JAMMER_POWER * (1.0 - (total_distance / JAMMER_MAX_RANGE_METERS)**2)
-        # === KONIEC STAREJ LOGIKI ===
+            # Realistyczny model spadku AMPLITUDY (prawo 1/d)
+            # Używamy wykładnika **1 (zamiast **2 dla mocy)
+            power_scale = STATIC_JAMMER_POWER * (AMPLITUDE_REFERENCE_DISTANCE_METERS / total_distance)**1
+        # --- KONIEC ZMIENIONEJ LOGIKI ---
         
-        print(f"Odbiornik W ZASIĘGU. Obliczona moc jammera (FSL): {power_scale*100:.1f}%")
+        # Obliczona moc jest teraz skalą Amplitudy
+        print(f"Odbiornik W ZASIĘGU. Obliczona skala amplitudy: {power_scale*100:.2f}%")
             
         start_index = int(SAMPLING_RATE * DELAY_SECONDS * 2)
         duration_samples = int(SAMPLING_RATE * DURATION_SECONDS * 2)
@@ -173,7 +163,7 @@ else:
         final_copy_len = min(jammer_copy_len, space_available)
 
         if final_copy_len > 0:
-            print(f"Dodaję jammer (moc {power_scale*100:.1f}%) od {DELAY_SECONDS}s do {DELAY_SECONDS + (final_copy_len / (SAMPLING_RATE * 2)):.2f}s")
+            print(f"Dodaję jammer (skala {power_scale*100:.2f}%) od {DELAY_SECONDS}s do {DELAY_SECONDS + (final_copy_len / (SAMPLING_RATE * 2)):.2f}s")
             jammer_power_profile[start_index : start_index + final_copy_len] = \
                 jammer_data[:final_copy_len] * power_scale 
         else:
