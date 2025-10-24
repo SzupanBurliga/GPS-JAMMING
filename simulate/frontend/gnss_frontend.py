@@ -7,7 +7,6 @@ import os
 import time
 import threading
 
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -37,18 +36,18 @@ class App(tk.Tk):
         self.form.columnconfigure(1, weight=1)
 
         self.label_names = [
-            "Nazwa pliku (.bin):",                 # 0
-            "Czas próbki (s):",                    # 1
-            "Długość geograficzna:",               # 2
-            "Szerokość geograficzna:",             # 3
-            "Wysokość (m n.p.m.):",                # 4
-            "Długość geograficzna (końcowa):",     # 5
-            "Szerokość geograficzna (końcowa):",   # 6
-            "Wysokość (m n.p.m.) – końcowa:",      # 7
+            "Nazwa pliku (.bin):",
+            "Czas próbki (s):",
+            "Szerokość geograficzna:",
+            "Długość geograficzna:",
+            "Wysokość (m n.p.m.):",
+            "Szerokość geograficzna (końcowa):",
+            "Długość geograficzna (końcowa):",
+            "Wysokość (m n.p.m.) – końcowa:",
         ]
 
         self.entries = []
-        self.row_widgets = []  # (label_widget, entry_widget)
+        self.row_widgets = []
         self.v_lat_key = (self.register(self._validate_lat_key), "%P")
         self.v_lon_key = (self.register(self._validate_lon_key), "%P")
         self.v_sec_key = (self.register(self._validate_seconds_key), "%P")
@@ -59,15 +58,15 @@ class App(tk.Tk):
         for r, name in enumerate(self.label_names):
             lbl = tk.Label(self.form, text=name, width=28, anchor="e")
 
-            if r == 0: # Nazwa pliku
+            if r == 0: 
                 ent = tk.Entry(self.form, width=40, validate="focusout", validatecommand=self.v_file_focusout)
-            elif r == 1:  # Czas próbki (s)
+            elif r == 1:
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_sec_key)
-            elif r in (3, 6):  # LAT (szerokość geograficzna)
+            elif r in (2, 5): 
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_lat_key)
-            elif r in (2, 5):  # LON (długość geograficzna)
+            elif r in (3, 6): 
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_lon_key)
-            elif r in (4, 7):  # ALT
+            elif r in (4, 7): 
                 ent = tk.Entry(self.form, width=40, validate="key", validatecommand=self.v_alt_key)
             else:
                 ent = tk.Entry(self.form, width=40)
@@ -91,16 +90,16 @@ class App(tk.Tk):
             tk.Radiobutton(radios, text=text, variable=self.mode_var, value=value)\
                 .grid(row=0, column=i, padx=(0 if i == 0 else 16, 0), sticky="w")
 
-        # ===== SEKCJA JAMMERA =====
+        # panel jammera
         self.jammer_frame = tk.Frame(self.root_frame)
         self.jammer_frame.grid(row=4, column=0, pady=(16,8), sticky="w")
         self.jammer_frame.columnconfigure(0, weight=0)
         self.jammer_frame.columnconfigure(1, weight=1)
 
-        # Pola jammera
-        self.jammer_labels = [
-            "Długość geograficzna jammera:",
+        # Pola jammera (tak jak były)
+        self.jammer_labels = [           
             "Szerokość geograficzna jammera:",
+            "Długość geograficzna jammera:",
             "Zasięg jammera (m):"
         ]
         
@@ -110,11 +109,11 @@ class App(tk.Tk):
         for r, name in enumerate(self.jammer_labels):
             lbl = tk.Label(self.jammer_frame, text=name, width=28, anchor="e")
             
-            if r == 0:  # LON jammera
-                ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_lon_key)
-            elif r == 1:  # LAT jammera
+            if r == 0:
                 ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_lat_key)
-            elif r == 2:  # Zasięg jammera
+            elif r == 1:
+                ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_lon_key)
+            elif r == 2:
                 ent = tk.Entry(self.jammer_frame, width=40, validate="key", validatecommand=self.v_range_key)
             
             lbl.grid(row=r, column=0, padx=(0,10), pady=5, sticky="e")
@@ -122,23 +121,42 @@ class App(tk.Tk):
             self.jammer_entries.append(ent)
             self.jammer_widgets.append((lbl, ent))
 
-        # Początkowo ukrywamy sekcję jammera
-        self.jammer_frame.grid_remove()
+        self.jammer_type_var = tk.StringVar(value="BB") 
 
+        jammer_types = [
+            ("Szum szerokopasmowy (Broadband Noise)", "BB"),
+            ("Sygnał o stałej fali (Continuous Wave - CW)", "CW"),
+            ("Jammer przemiatany (Swept / Chirp Jammer)", "SWEEP"),
+            ("Jammer impulsowy (Pulsed Jammer)", "PULSED")
+        ]
+
+        jammer_radios_frame = tk.Frame(self.jammer_frame)
+        jammer_radios_frame.grid(row=3, column=0, columnspan=2, pady=(10,0), sticky="w")
+
+        tk.Label(jammer_radios_frame, text="Typ jammera:", font=("Arial", 10, "bold"))\
+            .grid(row=0, column=0, sticky="w", pady=(0, 5))
+
+        for i, (text, value) in enumerate(jammer_types):
+            tk.Radiobutton(
+                jammer_radios_frame,
+                text=text,
+                variable=self.jammer_type_var,
+                value=value
+            ).grid(row=i + 1, column=0, sticky="w", padx=(10, 0))
+
+        self.jammer_frame.grid_remove()
         tk.Button(self.root_frame, text="START", bg="#4CAF50", fg="white",
                   font=("Arial", 11, "bold"), width=15,
                   command=self.on_start).grid(row=5, column=0, pady=24, sticky="w")
 
-        # ---- KONFIG: zakresy 
+        # konfig 
         self.ALT_MIN = -500.0
         self.ALT_MAX = 20000.0
-        
-        # ---- KONFIG: ścieżki
-        base_dir = os.path.dirname(os.path.abspath(__file__))          # → simulate/frontend
-        root_dir = os.path.abspath(os.path.join(base_dir, os.pardir))  # → simulate
-        gps_dir  = os.path.join(root_dir, "gps-sdr-sim")               # → simulate/gps-sdr-sim
-        self.GPS_SDR_SIM_PATH  = os.path.join(gps_dir, "gps-sdr-sim")   # plik binarny
-        self.EPHERIS_FILE_PATH = os.path.join(gps_dir, "brdc2830.25n")  # plik efemeryd
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.abspath(os.path.join(base_dir, os.pardir))
+        gps_dir  = os.path.join(root_dir, "gps-sdr-sim")
+        self.GPS_SDR_SIM_PATH  = os.path.join(gps_dir, "gps-sdr-sim")
+        self.EPHERIS_FILE_PATH = os.path.join(gps_dir, "brdc2830.25n")
         self.set_basic_defaults()
 
     def _validate_lat_key(self, P: str) -> bool:
@@ -194,7 +212,7 @@ class App(tk.Tk):
 
         self.update_input_visibility(base_count)
 
-        if self.mode_var.get() == "B":  # Jammer
+        if self.mode_var.get() == "B":
             self.jammer_frame.grid()
         else:
             self.jammer_frame.grid_remove()
@@ -211,26 +229,24 @@ class App(tk.Tk):
     def set_basic_defaults(self):
         """Ustawia domyślne wartości w polach formularza"""
         defaults = [
-            "test.bin",     # Nazwa pliku (.bin)
-            "120",          # Czas próbki (s)
-            "50.0263760",   # Długość geograficzna (start)
-            "19.944750",    # Szerokość geograficzna (start)
-            "350.0",        # Wysokość (start)
-            "50.0863760",   # Długość geograficzna (koniec) - używane gdy "Ruchomy"
-            "19.444750",    # Szerokość geograficzna (koniec)
-            "420.0",       # Wysokość (koniec)
+            "test.bin",
+            "120",
+            "50.0000000",
+            "19.9000000",
+            "350.0",
+            "50.0000000",
+            "19.9080000",
+            "350.0",
         ]
         for i, val in enumerate(defaults):
-            # wstaw tylko do istniejących, widoczność nie ma znaczenia
             if i < len(self.entries):
                 self.entries[i].delete(0, tk.END)
                 self.entries[i].insert(0, val)
 
-        # domyślne dla jammera (jeśli tryb B)
         jammer_defaults = [
-            "50.0263760",  # Długość geograficzna jammera
-            "19.644750",   # Szerokość geograficzna jammera
-            "10"           # Zasięg jammera [m]
+            "50.0263760",
+            "19.644750",
+            "10"
         ]
         for i, val in enumerate(jammer_defaults):
             if i < len(self.jammer_entries):
@@ -266,31 +282,34 @@ class App(tk.Tk):
         finally:
             self.after(0, lambda: self.start_btn_state(True))
 
-    def on_start(self):
-        # ---- USTAWIENIA EDYTOWALNE (1 miejsce do zmiany) ----
-        EPHEMERIS_FILE = self.EPHERIS_FILE_PATH         # -e
-        T_STATIONARY   = "2025/10/10,00:00:00"          # -T dla nieruchomego
-        T_MOBILE       = "2025/10/10,00:00:00"          # -T dla ruchomego
-        BITS           = "8"                            # -b
-        SAMPLERATE     = "2048000"                      # -s
-        TRAJ_FILE      = "traj.csv"                     # nazwa tworzonej trajektorii przy ruchomym
-        # -----------------------------------------------------
 
-        # --- Walidacje jak u Ciebie (skrócone tylko do potrzeb tego scenariusza) ---
+    def on_start(self):
+        # ustawienia na twardo wpisywane
+        EPHEMERIS_FILE = self.EPHERIS_FILE_PATH
+        T_STATIONARY   = "2025/10/10,00:00:00"
+        T_MOBILE       = "2025/10/10,00:00:00"
+        BITS           = "8"
+        SAMPLERATE     = "2048000"
+        TRAJ_FILE      = "traj.csv"
+
         base_count = 8 if self.is_ruchomy.get() else 5
         values = [self.entries[i].get().strip() for i in range(base_count)]
         mode = self.mode_var.get()
 
+        if mode == "":
+            messagebox.showerror("Błąd", "Wybierz tryb (Bez zakłóceń, Jammer lub Spoofer).")
+            return
+
         idx_filename   = 0
         idx_seconds    = 1
-        idx_lon_start  = 2
-        idx_lat_start  = 3
+        idx_lat_start  = 2
+        idx_lon_start  = 3
         idx_alt_start  = 4
-        idx_lon_end    = 5
-        idx_lat_end    = 6
+        idx_lat_end    = 5
+        idx_lon_end    = 6
         idx_alt_end    = 7
 
-        # podstawowe sprawdzenia
+        # Walidacja podstawowych pól (wspólna dla wszystkich trybów)
         filename = values[idx_filename]
         if not filename.lower().endswith(".bin"):
             messagebox.showerror("Błąd", "Nazwa pliku musi kończyć się na .bin")
@@ -314,68 +333,110 @@ class App(tk.Tk):
         if not self._alt_in_range(values[idx_alt_start]):
             messagebox.showerror("Błąd", f"Wysokość (start) musi być w zakresie {self.ALT_MIN}..{self.ALT_MAX} m.")
             self.entries[idx_alt_start].focus_set(); return
+        
+        if self.is_ruchomy.get():
+            if not self._lon_in_range(values[idx_lon_end]):
+                messagebox.showerror("Błąd", "Długość geograficzna (końcowa) musi być w zakresie −180..180.")
+                self.entries[idx_lon_end].focus_set(); return
+            if not self._lat_in_range(values[idx_lat_end]):
+                messagebox.showerror("Błąd", "Szerokość geograficzna (końcowa) musi być w zakresie −90..90.")
+                self.entries[idx_lat_end].focus_set(); return
+            if not self._alt_in_range(values[idx_alt_end]):
+                messagebox.showerror("Błąd", f"Wysokość (końcowa) musi być w zakresie {self.ALT_MIN}..{self.ALT_MAX} m.")
+                self.entries[idx_alt_end].focus_set(); return
 
-        # tylko tryb A uruchamia gps-sdr-sim
-        if mode != "A":
-            messagebox.showwarning("Uwaga", "gps-sdr-sim uruchamiany jest tylko w trybie 'Bez zakłóceń'.")
-            return
-
-        # prosta walidacja -T (YYYY/MM/DD,hh:mm:ss)
         TIMEREG = re.compile(r"^\d{4}/\d{2}/\d{2},\d{2}:\d{2}:\d{2}$")
         t_stationary = T_STATIONARY if TIMEREG.match(T_STATIONARY) else "2025/10/10,00:00:00"
         t_mobile     = T_MOBILE     if TIMEREG.match(T_MOBILE)     else "2025/10/10,00:00:00"
 
-        # budujemy komendę zależnie od ruchomy/nie
-        if not self.is_ruchomy.get():
-            # NIERUCHOMY → -l lat,lon,alt
-            lat = values[idx_lat_start]
-            lon = values[idx_lon_start]
-            alt = values[idx_alt_start]
-            cmd = [
-                self.GPS_SDR_SIM_PATH,
-                "-e", self.EPHERIS_FILE_PATH,
-                "-l", f"{lat},{lon},{alt}",
-                "-b", BITS,
-                "-d", str(seconds),
-                "-T", t_stationary,
-                "-o", filename,
-                "-s", SAMPLERATE,
-                "-v"
-            ]
-            self.start_btn_state(False)
-            threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
-            return
-        else:
-            # RUCHOMY → wygeneruj traj.csv, następnie -u traj.csv
-            traj_path = self.run_generate_trajectory(
-                start_lat=values[idx_lat_start],
-                start_lon=values[idx_lon_start],
-                start_alt=values[idx_alt_start],
-                end_lat=values[idx_lat_end],
-                end_lon=values[idx_lon_end],
-                end_alt=values[idx_alt_end],
-                duration_s=seconds,
-                step_s=0.1,
-                out_file=TRAJ_FILE
-            )
-            if traj_path is None:
-                return  # błąd pokazany w run_generate_trajectory
+        if mode == "A":
+            if not self.is_ruchomy.get():
+                lat = values[idx_lat_start]
+                lon = values[idx_lon_start]
+                alt = values[idx_alt_start]
+                cmd = [
+                    self.GPS_SDR_SIM_PATH,
+                    "-e", self.EPHERIS_FILE_PATH,
+                    "-l", f"{lat},{lon},{alt}",
+                    "-b", BITS,
+                    "-d", str(seconds),
+                    "-T", t_stationary,
+                    "-o", filename,
+                    "-s", SAMPLERATE,
+                    "-v"
+                ]
+                self.start_btn_state(False)
+                threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
+            else:
+                traj_path = self.run_generate_trajectory(
+                    start_lat=values[idx_lat_start],
+                    start_lon=values[idx_lon_start],
+                    start_alt=values[idx_alt_start],
+                    end_lat=values[idx_lat_end],
+                    end_lon=values[idx_lon_end],
+                    end_alt=values[idx_alt_end],
+                    duration_s=seconds,
+                    step_s=0.1,
+                    out_file=TRAJ_FILE
+                )
+                if traj_path is None:
+                    return 
 
-            cmd = [
-                self.GPS_SDR_SIM_PATH,
-                "-e", self.EPHERIS_FILE_PATH,
-                "-u", traj_path,
-                "-b", BITS,
-                "-d", str(seconds),
-                "-T", t_mobile,
-                "-o", filename,
-                "-s", SAMPLERATE,
-                "-v"
-            ]
-            self.start_btn_state(False)
-            threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
-            return
+                cmd = [
+                    self.GPS_SDR_SIM_PATH,
+                    "-e", self.EPHERIS_FILE_PATH,
+                    "-u", traj_path,
+                    "-b", BITS,
+                    "-d", str(seconds),
+                    "-T", t_mobile,
+                    "-o", filename,
+                    "-s", SAMPLERATE,
+                    "-v"
+                ]
+                self.start_btn_state(False)
+                threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
+        
+        elif mode == "B":
+            # walidacja pól jammera
+            try:
+                jammer_lat = self.jammer_entries[0].get().strip()
+                jammer_lon = self.jammer_entries[1].get().strip()
+                jammer_range = self.jammer_entries[2].get().strip()
+            except IndexError:
+                messagebox.showerror("Błąd", "Nie można odnaleźć pól jammera.")
+                return
 
+            if not self._lon_in_range(jammer_lon):
+                messagebox.showerror("Błąd", "Długość geograficzna jammera jest nieprawidłowa.")
+                self.jammer_entries[0].focus_set(); return
+            if not self._lat_in_range(jammer_lat):
+                messagebox.showerror("Błąd", "Szerokość geograficzna jammera jest nieprawidłowa.")
+                self.jammer_entries[1].focus_set(); return
+            if not self._range_in_range(jammer_range): # TODO: Upewnij się, że ta walidacja jest poprawna
+                messagebox.showerror("Błąd", "Zasięg jammera jest nieprawidłowy (musi być > 0).")
+                self.jammer_entries[2].focus_set(); return
+            jammer_type = self.jammer_type_var.get()
+
+            messagebox.showinfo("Start - Tryb Jammer", 
+                                f"Plik: {filename}\n"
+                                f"Czas: {seconds}s\n"
+                                f"Tryb: Jammer\n"
+                                f"Typ: {jammer_type}\n"
+                                f"Lokalizacja jammera: {jammer_lat}, {jammer_lon}\n"
+                                f"Zasięg: {jammer_range}m")
+            
+            script_map = {
+                "Chirp Jammer": "chirp_jammer.py",
+                "Pulsed Jammer": "pulsed_jammer.py",
+                "Continuous Wave - CW": "cw_jammer.py",
+                "Broadband Noise": "broadband_jammer.py"
+            }
+            
+            print(f"Uruchamianie trybu B (Jammer) z typem: {jammer_type}")
+
+        elif mode == "C":
+            messagebox.showinfo("Start - Tryb Spoofer", 
+                                "Tryb Spoofer nie jest jeszcze zaimplementowany.")
 
     # pomocnicze
     def _has_max_7_decimals(self, s: str) -> bool:
@@ -418,17 +479,16 @@ class App(tk.Tk):
             return False
 
     def _range_in_range(self, text: str) -> bool:
-        """Zasięg jammera: musi byc 0-100m"""
+        """Zasięg jammera: musi być > 0"""
         try:
             if text.strip() == "":
                 return False
             val = float(text)
-            return 0.0 < val <= 100.0
+            return val > 0.0
         except ValueError:
             return False
 
     def run_mode_script(self,mode, args):
-        # odpala skrypty na podstawie wybranego trybu
         scripts = {
             "A": "mode_a.py",
             "B": "mode_b.py",
@@ -446,7 +506,7 @@ class App(tk.Tk):
             messagebox.showerror("Błąd", f"Nie znaleziono skryptu: {script_name}")
             return
 
-        cmd = [sys.executable, script_path] + args
+        cmd = [sys. executable, script_path] + args
         try:
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as e:
@@ -456,7 +516,6 @@ class App(tk.Tk):
                                 end_lat, end_lon, end_alt,
                                 duration_s, step_s=1, out_file="traj.csv"):
         """
-        Odpala generate_trajectory.py z parametrami z GUI.
         generate_trajectory.py przyjmuje argumenty:
         --start-lat --start-lon --start-alt --end-lat --end-lon --end-alt
         --duration --step --out
@@ -480,10 +539,17 @@ class App(tk.Tk):
         ]
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            print(f"generate_trajectory.py output:\n{res.stdout}")
+            if res.stderr:
+                print(f"generate_trajectory.py error output:\n{res.stderr}")
             messagebox.showinfo("Trajektoria OK", f"Wygenerowano {out_file}")
             return out_file
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Błąd trajektorii", f"generate_trajectory.py zwrócił błąd:\n{e.stderr}")
+            err_msg = f"generate_trajectory.py zwrócił błąd:\n{e.stderr}"
+            if e.stdout:
+                err_msg += f"\nOutput (stdout):\n{e.stdout}"
+            messagebox.showerror("Błąd trajektorii", err_msg)
+            print(err_msg)
             return None
 
 
