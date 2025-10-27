@@ -157,6 +157,8 @@ class App(tk.Tk):
         gps_dir  = os.path.join(root_dir, "gps-sdr-sim")
         self.GPS_SDR_SIM_PATH  = os.path.join(gps_dir, "gps-sdr-sim")
         self.EPHERIS_FILE_PATH = os.path.join(gps_dir, "brdc2830.25n")
+        self.JAMMERS_DIR_PATH = os.path.join(base_dir, "jammers")
+        self.MIXER_SCRIPT_PATH = os.path.join(base_dir, "add_jammer_and_mix.py")
         self.set_basic_defaults()
 
     def _validate_lat_key(self, P: str) -> bool:
@@ -282,6 +284,52 @@ class App(tk.Tk):
         finally:
             self.after(0, lambda: self.start_btn_state(True))
 
+    def _run_jammer_sequence_thread(self, gps_cmd, jammer_cmd, mixer_cmd, final_filename):
+        try:
+            print("--- ROZPOCZĘCIE SEKWENCJI JAMMERA ---")
+            print(f"Polecenie: {' '.join(gps_cmd)}")
+            result_gps = subprocess.run(gps_cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+            print(result_gps.stderr)
+            print("Krok 1/3: Sygnał GPS wygenerowany.")
+
+            print(f"Krok 2/3: Uruchamianie skryptu jammera...")
+            result_jammer = subprocess.run(jammer_cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+            print(result_jammer.stdout)
+            if result_jammer.stderr:
+                print(result_jammer.stderr)
+            print("Krok 2/3: Sygnał jammera wygenerowany.")
+
+            print(f"Polecenie: {' '.join(mixer_cmd)}")
+            result_mixer = subprocess.run(mixer_cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+            print(result_mixer.stdout)
+            if result_mixer.stderr:
+                print(result_mixer.stderr)
+            print("Krok 3/3: Miksowanie zakończone.")
+            
+            msg = (f"Symulacja z jammerem zakończona pomyślnie!\n\n"
+                   f"Plik wyjściowy: {final_filename}\n"
+                   f"(Oryginalny plik GPS został nadpisany)")
+            self.after(0, lambda: messagebox.showinfo("Sukces", msg))
+
+        except subprocess.CalledProcessError as e:
+            # Jeśli którykolwiek z 3 kroków się nie powiedzie
+            error_msg = (f"Błąd podczas wykonywania polecenia:\n{' '.join(e.cmd)}\n\n"
+                         f"Błąd (stderr):\n{e.stderr}\n\n"
+                         f"Output (stdout):\n{e.stdout}")
+            print(f"BŁĄD SEKWENCJI: {error_msg}")
+            self.after(0, lambda: messagebox.showerror("Błąd sekwencji", error_msg))
+        except FileNotFoundError as e:
+            error_msg = f"Nie znaleziono pliku lub skryptu: {e.filename}"
+            print(f"BŁĄD SEKWENCJI: {error_msg}")
+            self.after(0, lambda: messagebox.showerror("Błąd - brak pliku", error_msg))
+        except Exception as e:
+            error_msg = f"Wystąpił nieoczekiwany błąd: {e}"
+            print(f"BŁĄD SEKWENCJI: {error_msg}")
+            self.after(0, lambda: messagebox.showerror("Błąd", error_msg))
+        finally:
+            # Niezależnie od wyniku, odblokuj przycisk START
+            print("--- ZAKOŃCZENIE SEKWENCJI JAMMERA ---")
+            self.after(0, lambda: self.start_btn_state(True))
 
     def on_start(self):
         # ustawienia na twardo wpisywane
@@ -397,7 +445,6 @@ class App(tk.Tk):
                 threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
         
         elif mode == "B":
-            # walidacja pól jammera
             try:
                 jammer_lat = self.jammer_entries[0].get().strip()
                 jammer_lon = self.jammer_entries[1].get().strip()
@@ -405,7 +452,6 @@ class App(tk.Tk):
             except IndexError:
                 messagebox.showerror("Błąd", "Nie można odnaleźć pól jammera.")
                 return
-
             if not self._lon_in_range(jammer_lon):
                 messagebox.showerror("Błąd", "Długość geograficzna jammera jest nieprawidłowa.")
                 self.jammer_entries[0].focus_set(); return
@@ -415,24 +461,96 @@ class App(tk.Tk):
             if not self._range_in_range(jammer_range): 
                 messagebox.showerror("Błąd", "Zasięg jammera jest nieprawidłowy (musi być > 0).")
                 self.jammer_entries[2].focus_set(); return
-            jammer_type = self.jammer_type_var.get()
-
-            messagebox.showinfo("Start - Tryb Jammer", 
-                                f"Plik: {filename}\n"
-                                f"Czas: {seconds}s\n"
-                                f"Tryb: Jammer\n"
-                                f"Typ: {jammer_type}\n"
-                                f"Lokalizacja jammera: {jammer_lat}, {jammer_lon}\n"
-                                f"Zasięg: {jammer_range}m")
             
+            jammer_type_key = self.jammer_type_var.get()
+            
+            gps_cmd = []
+            if not self.is_ruchomy.get():
+                lat = values[idx_lat_start]
+                lon = values[idx_lon_start]
+                alt = values[idx_alt_start]
+                gps_cmd = [
+                    self.GPS_SDR_SIM_PATH,
+                    "-e", self.EPHERIS_FILE_PATH,
+                    "-l", f"{lat},{lon},{alt}",
+                    "-b", BITS,
+                    "-d", str(seconds),
+                    "-T", t_stationary,
+                    "-o", filename, 
+                    "-s", SAMPLERATE,
+                    "-v"
+                ]
+            else:
+                traj_path = self.run_generate_trajectory(
+                    start_lat=values[idx_lat_start],
+                    start_lon=values[idx_lon_start],
+                    start_alt=values[idx_alt_start],
+                    end_lat=values[idx_lat_end],
+                    end_lon=values[idx_lon_end],
+                    end_alt=values[idx_alt_end],
+                    duration_s=seconds,
+                    step_s=0.1, 
+                    out_file=TRAJ_FILE
+                )
+                if traj_path is None:
+                    return 
+
+                gps_cmd = [
+                    self.GPS_SDR_SIM_PATH,
+                    "-e", self.EPHERIS_FILE_PATH,
+                    "-u", traj_path,
+                    "-b", BITS,
+                    "-d", str(seconds),
+                    "-T", t_mobile,
+                    "-o", filename,
+                    "-s", SAMPLERATE,
+                    "-v"
+                ]
+
             script_map = {
-                "Chirp Jammer": "chirp_jammer.py",
-                "Pulsed Jammer": "pulsed_jammer.py",
-                "Continuous Wave - CW": "cw_jammer.py",
-                "Broadband Noise": "broadband_jammer.py"
+                "SWEEP": "chirpJammer.py",
+                "PULSED": "pulsedJammer.py",
+                "CW": "cwJammer.py",
+                "BB": "broadbandJammer.py"
             }
             
-            print(f"Uruchamianie trybu B (Jammer) z typem: {jammer_type}")
+            jammer_script_name = script_map.get(jammer_type_key)
+            if not jammer_script_name:
+                messagebox.showerror("Błąd", f"Nie znaleziono skryptu dla typu jammera: {jammer_type_key}")
+                return
+                
+            jammer_script_path = os.path.join(self.JAMMERS_DIR_PATH, jammer_script_name)
+
+            jammer_cmd = [
+                sys.executable, 
+                jammer_script_path
+            ]
+
+            gps_input_file = filename 
+            final_output_file = filename 
+            
+            jammer_alt = "350.0" 
+
+            mixer_cmd = [
+                sys.executable,
+                self.MIXER_SCRIPT_PATH,
+                "--gps-file", gps_input_file,
+                "--output-file", final_output_file,
+                "--jammer-lat", jammer_lat,
+                "--jammer-lon", jammer_lon,
+                "--jammer-alt", jammer_alt,
+                "--jammer-range", jammer_range,
+                "--samplerate", SAMPLERATE
+                # --jammer-file, mozna dodac swojego"
+            ]
+
+            print(f"Rozpoczynanie sekwencji Trybu B (Jammer) dla pliku: {filename}")
+            self.start_btn_state(False) 
+            threading.Thread(
+                target=self._run_jammer_sequence_thread, 
+                args=(gps_cmd, jammer_cmd, mixer_cmd, final_output_file), 
+                daemon=True
+            ).start()
 
         elif mode == "C":
             messagebox.showinfo("Start - Tryb Spoofer", 
