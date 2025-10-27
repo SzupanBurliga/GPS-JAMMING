@@ -9,7 +9,6 @@ GPS_WEAKEN_SCALE = 0.05
 GPS_TRAJ_FILE = 'traj.csv' 
 DYNAMIC_JAMMER_POWER = 1.0 
 STATIC_JAMMER_POWER = 1.0  
-AMPLITUDE_REFERENCE_DISTANCE_METERS = 15.0 
 
 
 
@@ -36,6 +35,7 @@ def main(args):
 
     DELAY_SECONDS = args.delay_seconds
     DURATION_SECONDS = args.duration_seconds
+    AMPLITUDE_REFERENCE_DISTANCE_METERS = JAMMER_MAX_RANGE_METERS * 0.5
 
     try:
         print(f"Wczytywanie sygnału GPS z: {GPS_SIGNAL_FILE}")
