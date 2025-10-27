@@ -3,14 +3,16 @@ import pandas as pd
 from haversine import haversine, Unit
 import os.path
 import math
+import argparse
 
 # ustawienia na twardo (pliki i inne)
 SAMPLING_RATE = 2048000  
 GPS_WEAKEN_SCALE = 0.05  
-GPS_TRAJ_FILE = 'traj.csv' 
 GPS_SIGNAL_FILE = 'test.bin'
+OUTPUT_FILE = 'symulacja_jammera.bin'
+GPS_TRAJ_FILE = 'traj.csv' 
 JAMMER_SIGNAL_FILE = 'jammers/jammer_file.bin'
-OUTPUT_FILE = 'final_output_z_zagluszeniem.bin'
+
 
 # ustawienia jammera
 JAMMER_MAX_RANGE_METERS = 10.0  # Maksymalny zasięg, po którym moc = 0 (promień jammera)
@@ -50,13 +52,18 @@ jammer_data = jammer_data[:min_len]
 jammer_power_profile = np.zeros_like(gps_slaby)
 
 if os.path.exists(GPS_TRAJ_FILE):
-    print("Tryb DYNAMICZNY (Realistyczny model 1/d). Wczytuję plik trajektorii...")
+    print("Tryb DYNAMICZNY")
     JAMMER_ECEF = latlon_to_ecef(JAMMER_LOCATION[0], JAMMER_LOCATION[1], JAMMER_LOCATION[2])
     try:
         traj_df = pd.read_csv(GPS_TRAJ_FILE, header=None, names=['time', 'x', 'y', 'z'])
     except Exception as e:
         print(f"Błąd wczytywania pliku trajektorii: {e}")
         exit()
+    try:
+        os.remove(GPS_TRAJ_FILE)
+        print(f"Plik {GPS_TRAJ_FILE} został pomyślnie wczytany i usunięty.")
+    except OSError as e:
+        print(f"Nie można usunąć pliku {GPS_TRAJ_FILE}. Błąd: {e}")
 
     power_profile_per_timestep = [] 
     for index, row in traj_df.iterrows():

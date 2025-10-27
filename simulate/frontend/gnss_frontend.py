@@ -412,7 +412,7 @@ class App(tk.Tk):
             if not self._lat_in_range(jammer_lat):
                 messagebox.showerror("Błąd", "Szerokość geograficzna jammera jest nieprawidłowa.")
                 self.jammer_entries[1].focus_set(); return
-            if not self._range_in_range(jammer_range): # TODO: Upewnij się, że ta walidacja jest poprawna
+            if not self._range_in_range(jammer_range): 
                 messagebox.showerror("Błąd", "Zasięg jammera jest nieprawidłowy (musi być > 0).")
                 self.jammer_entries[2].focus_set(); return
             jammer_type = self.jammer_type_var.get()
