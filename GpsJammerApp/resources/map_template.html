@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa GPS Jamming Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <style>
+    /* POPRAWKA: Podwójne nawiasy klamrowe */
+    html, body, #map {{ height: 100%; margin: 0; }}
+    .info {{
+      padding: 6px 8px;
+      font: 14px/16px Arial, Helvetica, sans-serif;
+      background: white;
+      background: rgba(255,255,255,0.8);
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      border-radius: 5px;
+    }}
+    .legend {{
+      line-height: 18px;
+      color: #555;
+    }}
+    .legend i {{
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.7;
+    }}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    /* TE POZOSTAJĄ POJEDYNCZE - dla Pythona */
+    const lat = {LAT};
+    const lng = {LNG};
+    const zoom = {ZOOM};
+
+    const map = L.map('map').setView([lat, lng], zoom);
+
+    /* POPRAWKA: Podwójne nawiasy dla Leaflet */
+    const osmLayer = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+    }});
+
+    /* POPRAWKA: Podwójne nawiasy dla Leaflet */
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri'
+    }});
+
+    /* POPRAWKA: Podwójne nawiasy dla Leaflet */
+    const topoLayer = L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png', {{
+      maxZoom: 17,
+      attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>'
+    }});
+
+    // Domyślna warstwa
+    osmLayer.addTo(map);
+
+    // Kontrola warstw
+    const baseMaps = {{
+      "OpenStreetMap": osmLayer,
+      "Satelitarna": satelliteLayer,
+      "Topograficzna": topoLayer
+    }};
+
+    L.control.layers(baseMaps).addTo(map);
+
+    // Marker główny
+    /* POPRAWKA: Podwójne nawiasy dla tekstu JS */
+    const mainMarker = L.marker([lat, lng]).addTo(map)
+      .bindPopup(`<b>Punkt bazowy</b><br>Lat: ${{lat.toFixed(5)}}<br>Lng: ${{lng.toFixed(5)}}`)
+      .openPopup();
+
+    // Zmienne globalne dla markerów sygnałów
+    let signalMarkers = [];
+    let jammingZones = [];
+    
+    let liveMarker = null;
+    let livePolyline = null;
+
+    // Funkcja do dodawania punktów zakłóceń
+    function addJammingPoint(lat, lng, strength, frequency) {{
+      const color = strength > 80 ? 'red' : strength > 50 ? 'orange' : 'yellow';
+      /* POPRAWKA: Podwójne nawiasy dla obiektu JS */
+      const marker = L.circleMarker([lat, lng], {{
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.6,
+        radius: Math.max(5, strength / 10)
+      }}).addTo(map);
+      
+      /* POPRAWKA: Podwójne nawiasy dla tekstu JS */
+      marker.bindPopup(`
+        <b>Zakłócenie GPS</b><br>
+        Siła: ${{strength}}%<br>
+        Częstotliwość: ${{frequency}} MHz<br>
+        Współrzędne: ${{lat.toFixed(6)}}, ${{lng.toFixed(6)}}
+      `);
+      
+      signalMarkers.push(marker);
+      return marker;
+    }}
+
+    // Funkcja do czyszczenia markerów
+    function clearSignalMarkers() {{
+      signalMarkers.forEach(marker => map.removeLayer(marker));
+      signalMarkers = [];
+      
+      if (liveMarker) {{
+        map.removeLayer(liveMarker);
+        liveMarker = null;
+      }}
+      if (livePolyline) {{
+        map.removeLayer(livePolyline);
+        livePolyline = null;
+      }}
+    }}
+
+    // Funkcja do zmiany warstwy (wywoływana z PyQt)
+    function changeMapLayer(layerName) {{
+      map.eachLayer(function(layer) {{
+        if (layer._url) map.removeLayer(layer);
+      }});
+      
+      switch(layerName) {{
+        case 'osm':
+          osmLayer.addTo(map);
+          break;
+        case 'satellite':
+          satelliteLayer.addTo(map);
+          break;
+        case 'topo':
+          topoLayer.addTo(map);
+          break;
+      }}
+    }}
+    
+    // Funkcja do aktualizacji pozycji na żywo
+    function updateLivePosition(lat, lng) {{
+      const newPos = [lat, lng];
+      
+      if (!liveMarker) {{
+        /* POPRAWKA: Podwójne nawiasy dla obiektu JS */
+        liveMarker = L.circleMarker(newPos, {{
+          color: '#3388ff',
+          fillColor: '#3388ff',
+          fillOpacity: 0.8,
+          radius: 8,
+          weight: 3
+        }}).addTo(map);
+        liveMarker.bindPopup("<b>Moja lokalizacja</b>").openPopup();
+        
+      }} else {{
+        liveMarker.setLatLng(newPos);
+      }}
+      
+      if (!livePolyline) {{
+        /* POPRAWKA: Podwójne nawiasy dla obiektu JS */
+        livePolyline = L.polyline([newPos], {{
+          color: '#3388ff',
+          weight: 4,
+          opacity: 0.7
+        }}).addTo(map);
+      }} else {{
+        livePolyline.addLatLng(newPos);
+      }}
+      
+      map.panTo(newPos);
+    }}
+
+    // Legenda
+    /* POPRAWKA: Podwójne nawiasy dla obiektu JS */
+    const legend = L.control({{position: 'bottomright'}});
+    legend.onAdd = function (map) {{
+      const div = L.DomUtil.create('div', 'info legend');
+      div.innerHTML = `
+        <h4>Siła zakłóceń GPS</h4>
+        <i style="background:red"></i> Wysokie (80-100%)<br>
+        <i style="background:orange"></i> Średnie (50-80%)<br>
+        <i style="background:yellow"></i> Niskie (0-50%)<br>
+      `;
+      return div;
+    }};
+    legend.addTo(map);
+
+    // Ekspozycja funkcji dla PyQt
+    window.addJammingPoint = addJammingPoint;
+    window.clearSignalMarkers = clearSignalMarkers;
+    window.changeMapLayer = changeMapLayer;
+    window.updateLivePosition = updateLivePosition;
+  </script>
+</body>
+</html>
