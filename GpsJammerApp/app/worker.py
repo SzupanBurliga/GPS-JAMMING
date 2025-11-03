@@ -1,10 +1,10 @@
-# worker.py
 import os
 import random
 import time
 from PySide6.QtCore import QThread, Signal
 from . import config  
 
+# TU DODAĆ SKRYPT KAMILA !!!
 class GPSAnalysisThread(QThread):
     """Thread do analizy plików GPS w tle"""
     analysis_complete = Signal(list)  
@@ -20,12 +20,10 @@ class GPSAnalysisThread(QThread):
             points = []
             file_size = os.path.getsize(self.file_path) if os.path.exists(self.file_path) else 1000000
             
-            # Symulacja analizy - zastąp prawdziwą analizą sygnału
-            for i in range(20):  # 20 punktów testowych
+            for i in range(20):  
                 if self.isInterruptionRequested():
                     return
                     
-                # Używamy stałych z pliku config
                 lat = config.LAT + random.uniform(-0.01, 0.01)
                 lng = config.LNG + random.uniform(-0.01, 0.01)
                 strength = random.randint(10, 95)
@@ -40,7 +38,7 @@ class GPSAnalysisThread(QThread):
                 })
                 
                 self.progress_update.emit(int((i + 1) / 20 * 100))
-                time.sleep(0.1)  # Symulacja czasu analizy
+                time.sleep(0.1)  
                 
             self.analysis_complete.emit(points)
             

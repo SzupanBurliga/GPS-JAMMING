@@ -1,4 +1,3 @@
-# ui_mainwindow.py
 import os
 import random
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
@@ -14,10 +13,9 @@ from .worker import GPSAnalysisThread
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("GPS Jamming Analysis - Mapa i Analiza Sygnałów")
+        self.setWindowTitle("GPS Jamming - Mapa i Analiza Sygnałów")
         self.resize(1400, 800)
         
-        # Style dla głównego okna
         self.setStyleSheet("""
         QMainWindow {
             background-color: #ecf0f1;
@@ -28,24 +26,15 @@ class MainWindow(QMainWindow):
             font-weight: bold;
         }
         """)
-        
-        # Widget główny
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        
-        # Layout główny (poziomy)
         main_layout = QHBoxLayout(main_widget)
-        
-        # Panel kontrolny po lewej stronie
         self.create_control_panel(main_layout)
-        
-        # Mapa po prawej stronie
         self.web_view = QWebEngineView()
         
         try:
             with open("resources/map_template.html", "r", encoding="utf-8") as f:
                 html_template = f.read()
-            
             # Wstrzyknij stałe z config.py do szablonu HTML
             self.web_view.setHtml(html_template.format(
                 LAT=config.LAT, 
@@ -55,14 +44,11 @@ class MainWindow(QMainWindow):
         except FileNotFoundError:
             print("BŁĄD: Nie można załadować pliku map_template.html!")
             self.web_view.setHtml("<h1>Błąd: Nie znaleziono pliku map_template.html</h1>")
-        # *** KONIEC ZMIANY ***
-            
-        main_layout.addWidget(self.web_view, 3)  # 3/4 szerokości dla mapy
-        
-        # Thread do analizy
+
+        main_layout.addWidget(self.web_view, 3)
+ 
         self.analysis_thread = None
-        
-        # Timer i pozycja dla śledzenia na żywo (używamy config)
+
         self.live_track_timer = QTimer(self)
         self.live_track_timer.timeout.connect(self.update_live_position)
         self.current_live_lat = config.LAT
@@ -73,9 +59,8 @@ class MainWindow(QMainWindow):
         control_panel = QWidget()
         control_panel.setMaximumWidth(350)
         control_panel.setMinimumWidth(300)
-        main_layout.addWidget(control_panel, 1)  # 1/4 szerokości dla panelu
-        
-        # Style dla przycisków
+        main_layout.addWidget(control_panel, 1)  
+
         button_style = """
         QPushButton {
             background-color: #2c3e50;
@@ -99,8 +84,6 @@ class MainWindow(QMainWindow):
             color: #bdc3c7;
         }
         """
-        
-        # Style dla przycisków mapy (różne kolory)
         map_button_style = """
         QPushButton {
             color: white;
@@ -119,8 +102,7 @@ class MainWindow(QMainWindow):
             transform: translateY(0px);
         }
         """
-        
-        # Style dla przycisków akcji
+
         action_button_style = """
         QPushButton {
             background-color: #27ae60;
@@ -140,8 +122,7 @@ class MainWindow(QMainWindow):
             background-color: #229954;
         }
         """
-        
-        # Style dla przycisków niebezpiecznych (clear, delete)
+
         danger_button_style = """
         QPushButton {
             background-color: #e74c3c;
@@ -161,8 +142,7 @@ class MainWindow(QMainWindow):
             background-color: #a93226;
         }
         """
-        
-        # Style dla przycisków testowych
+
         test_button_style = """
         QPushButton {
             background-color: #f39c12;
@@ -182,8 +162,7 @@ class MainWindow(QMainWindow):
             background-color: #d68910;
         }
         """
-        
-        # Style dla grup
+
         group_style = """
         QGroupBox {
             font-weight: bold;
@@ -204,8 +183,7 @@ class MainWindow(QMainWindow):
         """
         
         layout = QVBoxLayout(control_panel)
-        
-        # === GRUPA: Typ Mapy ===
+
         map_group = QGroupBox("Typ Mapy")
         map_group.setStyleSheet(group_style)
         map_layout = QVBoxLayout(map_group)
@@ -226,13 +204,11 @@ class MainWindow(QMainWindow):
         map_layout.addWidget(self.topo_btn)
         
         layout.addWidget(map_group)
-        
-        # === GRUPA: Analiza GPS ===
+
         analysis_group = QGroupBox("Analiza Sygnałów GPS")
         analysis_group.setStyleSheet(group_style)
         analysis_layout = QVBoxLayout(analysis_group)
-        
-        # Wybór pliku
+
         file_layout = QHBoxLayout()
         self.file_label = QLabel("Brak pliku")
         self.file_label.setWordWrap(True)
@@ -254,16 +230,14 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.browse_btn)
         
         analysis_layout.addLayout(file_layout)
-        
-        # Parametry analizy
+
         params_layout = QVBoxLayout()
-        
-        # Częstotliwość
+
         freq_layout = QHBoxLayout()
         freq_layout.addWidget(QLabel("Częstotliwość [MHz]:"))
         self.freq_spin = QDoubleSpinBox()
         self.freq_spin.setRange(1500, 1600)
-        self.freq_spin.setValue(1575.42)  # L1 GPS
+        self.freq_spin.setValue(1575.42) 
         self.freq_spin.setDecimals(2)
         self.freq_spin.setStyleSheet("""
         QDoubleSpinBox {
@@ -279,8 +253,7 @@ class MainWindow(QMainWindow):
         """)
         freq_layout.addWidget(self.freq_spin)
         params_layout.addLayout(freq_layout)
-        
-        # Próg wykrywania
+
         threshold_layout = QHBoxLayout()
         threshold_layout.addWidget(QLabel("Próg wykrywania [%]:"))
         self.threshold_spin = QSpinBox()
@@ -302,8 +275,7 @@ class MainWindow(QMainWindow):
         params_layout.addLayout(threshold_layout)
         
         analysis_layout.addLayout(params_layout)
-        
-        # Przyciski analizy
+
         self.analyze_btn = QPushButton("🔍 Rozpocznij Analizę")
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.analyze_btn.setStyleSheet(action_button_style)
@@ -313,8 +285,7 @@ class MainWindow(QMainWindow):
         self.clear_btn.clicked.connect(self.clear_markers)
         self.clear_btn.setStyleSheet(danger_button_style)
         analysis_layout.addWidget(self.clear_btn)
-        
-        # Pasek postępu
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setStyleSheet("""
@@ -333,28 +304,24 @@ class MainWindow(QMainWindow):
         analysis_layout.addWidget(self.progress_bar)
         
         layout.addWidget(analysis_group)
-        
-        # === NOWA GRUPA: Śledzenie na żywo ===
+
         live_group = QGroupBox("Śledzenie na żywo")
         live_group.setStyleSheet(group_style)
         live_layout = QHBoxLayout(live_group)
         
         self.start_live_btn = QPushButton("▶️ Start")
         self.start_live_btn.clicked.connect(self.start_live_tracking)
-        self.start_live_btn.setStyleSheet(action_button_style) # Zielony
+        self.start_live_btn.setStyleSheet(action_button_style) 
         live_layout.addWidget(self.start_live_btn)
         
         self.stop_live_btn = QPushButton("⏹️ Stop")
         self.stop_live_btn.clicked.connect(self.stop_live_tracking)
-        self.stop_live_btn.setStyleSheet(danger_button_style) # Czerwony
-        self.stop_live_btn.setEnabled(False) # Domyślnie wyłączony
+        self.stop_live_btn.setStyleSheet(danger_button_style) 
+        self.stop_live_btn.setEnabled(False) 
         live_layout.addWidget(self.stop_live_btn)
         
         layout.addWidget(live_group)
-        # === KONIEC NOWEJ GRUPY ===
-        
-        
-        # === GRUPA: Wyniki ===
+
         results_group = QGroupBox("Wyniki Analizy")
         results_group.setStyleSheet(group_style)
         results_layout = QVBoxLayout(results_group)
@@ -376,8 +343,7 @@ class MainWindow(QMainWindow):
         results_layout.addWidget(self.results_text)
         
         layout.addWidget(results_group)
-        
-        # === GRUPA: Test Data ===
+
         test_group = QGroupBox("Dane Testowe")
         test_group.setStyleSheet(group_style)
         test_layout = QVBoxLayout(test_group)
@@ -388,8 +354,7 @@ class MainWindow(QMainWindow):
         test_layout.addWidget(self.add_test_btn)
         
         layout.addWidget(test_group)
-        
-        # Spacer na dole
+
         layout.addStretch()
         
     def change_map_layer(self, layer_type):
@@ -442,15 +407,12 @@ class MainWindow(QMainWindow):
         if not points:
             self.results_text.setPlainText("Nie znaleziono punktów zakłóceń lub błąd analizy.")
             return
-            
-        # Dodaj punkty na mapę
+
         for point in points:
             js_code = f"""
             addJammingPoint({point['lat']}, {point['lng']}, {point['strength']}, {point['frequency']});
             """
             self.web_view.page().runJavaScript(js_code)
-            
-        # Podsumowanie w tekście
         high_strength = [p for p in points if p['strength'] > 80]
         medium_strength = [p for p in points if 50 <= p['strength'] <= 80]
         low_strength = [p for p in points if p['strength'] < 50]
@@ -494,23 +456,19 @@ Parametry analizy:
             
         self.results_text.setPlainText(f"Dodano {len(test_points)} testowych punktów zakłóceń GPS.")
 
-    # === METODY DO ŚLEDZENIA NA ŻYWO ===
-    
     def start_live_tracking(self):
         """Rozpoczyna symulację śledzenia na żywo co 3 sekundy"""
         self.start_live_btn.setEnabled(False)
         self.stop_live_btn.setEnabled(True)
-        
-        # Ustaw pozycję startową (używamy config)
+
         self.current_live_lat = config.LAT + random.uniform(-0.01, 0.01)
         self.current_live_lng = config.LNG + random.uniform(-0.01, 0.01)
-        
-        # Uruchom pierwszy raz od razu, aby pokazać marker
+
         self.update_live_position() 
         
-        # Ustaw timer na 3000 ms (3 sekundy)
-        self.live_track_timer.start(3000)
-        self.results_text.setPlainText("Rozpoczęto śledzenie na żywo (co 3 sek.).")
+        # Ustaw timer na 1000 ms )
+        self.live_track_timer.start(1000)
+        self.results_text.setPlainText("Rozpoczęto śledzenie na żywo (co 1 sek.).")
         
     def stop_live_tracking(self):
         """Zatrzymuje śledzenie na żywo"""
@@ -519,10 +477,9 @@ Parametry analizy:
         self.stop_live_btn.setEnabled(False)
         self.results_text.setPlainText("Zatrzymano śledzenie na żywo.")
 
+
+# tu skrypt kuby !!!!!!!!!!!!!!!!!!!!!!1
     def update_live_position(self):
-        """Symuluje nowy punkt i wysyła do JS"""
-        
-        # Symulacja małego ruchu (zastąp prawdziwymi danymi)
         self.current_live_lat += random.uniform(-0.0005, 0.0005)
         self.current_live_lng += random.uniform(0.0003, 0.001) # Symulacja ruchu na wschód
         
