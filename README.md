@@ -31,7 +31,7 @@ cd /ścieżka/do/projektu
 cd GPS-JAMMING
 
 # Utwórz virtualenv
-python3 -m venv .venv
+python3 -m venv --system-site-packages .venv
 
 # Aktywuj virtualenv
 # Linux/macOS:
