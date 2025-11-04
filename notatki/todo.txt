@@ -8,3 +8,11 @@ do zrobienia:
  Dodatkowe pomysly jakby bylo mało roboty:
 - zrobić kateogryzacje tych 4 jammerów - jakieś flagi czy coś ( w sensie rozpoznawanie) (ewentualnie model do rozpoznawania tego)
 - zrobić research jakiego typu jammera używają na ukrainie (ważne)(cięzko znaleźć)
+
+
+NA TERAZ
+- readme do odpalenia
+- naprawić widok
+- przekminić jak odczytywać utime z pliku w pythonie
+
+Wysłać kubie screeny i notatki :)

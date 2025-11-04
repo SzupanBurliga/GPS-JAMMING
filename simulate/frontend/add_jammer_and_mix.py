@@ -5,10 +5,10 @@ import os.path
 import math
 import argparse
 
-GPS_WEAKEN_SCALE = 0.357  
+GPS_WEAKEN_SCALE = 0.187  
 GPS_TRAJ_FILE = 'traj.csv' 
-DYNAMIC_JAMMER_POWER = 0.405 
-STATIC_JAMMER_POWER = 0.405
+DYNAMIC_JAMMER_POWER = 0.605 
+STATIC_JAMMER_POWER = 0.605
 
 def latlon_to_ecef(lat, lon, alt):
     """Konwertuje współrzędne LLA na ECEF."""
