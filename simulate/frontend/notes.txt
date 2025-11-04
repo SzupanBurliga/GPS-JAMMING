@@ -4,13 +4,12 @@ python add_jammer.py --iq test.bin --out jammed.bin --type noise --traj traj.csv
 
 
 do zrobienia:
- - zautomatyzować to mixowanie - GOTOWE !!!!!!! :))))
- - przenieść skrypty jammerów do dobrego foldera - GOTOWE
- - po zmixowaniu, kasowanie tego pliku traj.csv - GOTOWE
- - posprzątać syf - 50% GOTOWE
-
- TASKI NA PÓŹNIEJ: 
- - podłączyć to do frontu głównego
+ - podłączyć to do frontu głównego (gotowe)
  - podłączyć skrypt od zryta do tego
  - podłączyć skrypt kuby do frontu
  - przekminić logike sensu połączenia tego frontu
+ 
+ Dodatkowe pomysly jakby bylo mało roboty:
+- zrobić kateogryzacje tych 4 jammerów - jakieś flagi czy coś ( w sensie rozpoznawanie)
+- zrobić research jakiego typu jammera używają na ukrainie
+- zrobić live feed frontendu (50% jest)

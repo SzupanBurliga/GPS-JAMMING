@@ -5,12 +5,10 @@ import os.path
 import math
 import argparse
 
-GPS_WEAKEN_SCALE = 0.05  
+GPS_WEAKEN_SCALE = 0.357  
 GPS_TRAJ_FILE = 'traj.csv' 
-DYNAMIC_JAMMER_POWER = 1.0 
-STATIC_JAMMER_POWER = 1.0  
-
-
+DYNAMIC_JAMMER_POWER = 0.405 
+STATIC_JAMMER_POWER = 0.405
 
 def latlon_to_ecef(lat, lon, alt):
     """Konwertuje współrzędne LLA na ECEF."""
@@ -175,7 +173,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Miksowanie sygnału GPS z sygnałem jammera.")
     
     parser.add_argument("--gps-file", required=True, help="Plik wejściowy z sygnałem GPS (np. test.bin)")
-    parser.add_argument("--jammer-file", default="jammers/jammer_file.bin", help="Plik wejściowy z sygnałem jammera (domyślnie: jammers/jammer_file.bin)")
+    parser.add_argument("--jammer-file", default="jammer_file.bin", help="Plik wejściowy z sygnałem jammera (domyślnie: jammers/jammer_file.bin)")
     parser.add_argument("--output-file", required=True, help="Nazwa pliku wyjściowego (np. final_output.bin)")
     parser.add_argument("--static-lat", type=float, default=None, help="Szerokość geograficzna odbiornika w trybie statycznym")
     parser.add_argument("--static-lon", type=float, default=None, help="Długość geograficzna odbiornika w trybie statycznym")
