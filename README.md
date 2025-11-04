@@ -7,7 +7,7 @@ Przewodnik krok po kroku do uruchomienia systemu analizy i detekcji zakłóceń 
 - **System operacyjny**: Linux (zalecane Ubuntu 20.04+), Windows 10/11, macOS
 - **Python**: 3.8+ (zalecane 3.10 lub 3.11)
 - **RAM**: minimum 4GB (zalecane 8GB+)
-- **Miejsce na dysku**: ~5GB na wszystkie zależności
+- **Miejsce na dysku**: ~20GB na wszystkie zależności
 - **Grafika**: karta obsługująca OpenGL (do map i wizualizacji)
 
 ## 🚀 Krok 1: Przygotowanie środowiska
