@@ -85,7 +85,8 @@ if __name__ == "__main__":
                     print(f"[Sample {timestamp_sample}] WYKRYTO JAMMING (Moc: {avg_power:.2f})", flush=True)
                 
                 elif is_jamming_now and was_jamming_previously:
-                    print(f"[Sample {timestamp_sample}] ...Jamming trwa (Moc: {avg_power:.2f})", flush=True)
+                    x = 3
+                    #print(f"[Sample {timestamp_sample}] ...Jamming trwa (Moc: {avg_power:.2f})", flush=True)
 
                 elif not is_jamming_now and was_jamming_previously:
                     print(f"[Sample {timestamp_sample}] KONIEC JAMMINGU (Moc: {avg_power:.2f})", flush=True)
