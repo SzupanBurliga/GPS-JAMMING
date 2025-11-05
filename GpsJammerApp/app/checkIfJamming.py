@@ -43,7 +43,7 @@ def analyze_file_for_jamming(file_path: str, power_threshold: float) -> tuple:
 
                 is_jamming_now, avg_power = analyze_chunk_power(
                     raw_chunk_uint8,
-                    power_threshold
+                    power_threshold 
                 )
                 
                 was_jamming_previously = current_jamming_state
