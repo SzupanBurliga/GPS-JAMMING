@@ -377,16 +377,27 @@ class MainWindow(QMainWindow):
         self.clear_btn.setEnabled(False) 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        
+        self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n")
         self.analysis_thread = GPSAnalysisThread(self.current_files)
-        
         self.analysis_thread.progress_update.connect(self.update_progress)
         self.analysis_thread.analysis_complete.connect(self.analysis_finished)
         self.analysis_thread.new_position_data.connect(self.update_map_position)
+        self.analysis_thread.new_analysis_text.connect(self.update_analysis_text)
+        
         self.analysis_thread.start()
+    
+    def update_analysis_text(self, text):
+        current_text = self.results_text.toPlainText()
+        updated_text = current_text + "\n" + text
+        lines = updated_text.split('\n')
+        if len(lines) > 50:
+            lines = lines[-50:]
+            updated_text = '\n'.join(lines)
         
-        self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...")
-        
+        self.results_text.setPlainText(updated_text)
+        scrollbar = self.results_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
     def update_progress(self, value):
         self.progress_bar.setValue(value)
         
@@ -403,9 +414,27 @@ class MainWindow(QMainWindow):
         self.analyze_btn.setEnabled(True)
         self.clear_btn.setEnabled(True) 
         self.progress_bar.setVisible(False)
+
+        if points and len(points) > 0:
+            if points[0].get('type') == 'jamming':
+                jamming_info = points[0]
+                start_sample = jamming_info.get('start_sample')
+                end_sample = jamming_info.get('end_sample')
+                
+                if end_sample is not None:
+                    jamming_text = f"Znaleziono jamming [{start_sample}, {end_sample}]"
+                else:
+                    jamming_text = f"Znaleziono jamming [{start_sample}, koniec pliku]"
+                    
+                self.results_text.setPlainText(jamming_text)
+                return
+            
+            elif points[0].get('type') == 'no_jamming':
+                self.results_text.setPlainText("Nie znaleziono punktów zakłóceń lub błąd analizy.")
+                return
         
+        # kod dla normalnych punktów zakłóceń - na przyszłość
         if not points:
-            self.results_text.setPlainText("Nie znaleziono punktów zakłóceń lub błąd analizy.")
             return
 
         for point in points:
@@ -418,6 +447,8 @@ class MainWindow(QMainWindow):
         medium_strength = [p for p in points if 50 <= p['strength'] <= 80]
         low_strength = [p for p in points if p['strength'] < 50]
         
+
+        # tu zostawione, może się przyda kiedyś XD
         summary = f"""ANALIZA ZAKOŃCZONA:
 Przeanalizowano plików: {len(self.current_files)}
 Znaleziono {len(points)} punktów zakłóceń GPS
@@ -436,13 +467,11 @@ Parametry analizy:
         self.results_text.setPlainText(summary)
         
     def clear_markers(self):
-        """Czyści wszystkie markery z mapy"""
         self.web_view.page().runJavaScript("clearSignalMarkers();")
         self.results_text.setPlainText("Markery i ślad zostały wyczyszczone.")
         self.is_map_centered = False
         
     def run_simulation_script(self):
-            """Uruchamia zewnętrzny skrypt Pythona do generowania symulacji."""
             python_executable = sys.executable
             
             try:

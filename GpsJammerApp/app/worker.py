@@ -5,7 +5,8 @@ import sys
 import json
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import datetime 
+import datetime
+from .checkIfJamming import analyze_file_for_jamming 
 
 class _DataReceiverHandler(BaseHTTPRequestHandler):
     thread_instance = None
@@ -16,11 +17,7 @@ class _DataReceiverHandler(BaseHTTPRequestHandler):
                 content_length = int(self.headers.get('Content-Length', 0))
                 body = self.rfile.read(content_length)
                 data = json.loads(body.decode('utf-8'))
-
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                print(f"\n[{timestamp}] Otrzymano dane JSON:")
-                print(json.dumps(data, indent=2, ensure_ascii=False))
-
+                
                 if self.thread_instance:
                     self.thread_instance.process_incoming_data(data)
                     
@@ -56,7 +53,7 @@ class _DataReceiverHandler(BaseHTTPRequestHandler):
                 pass
 
     def log_message(self, format, *args):
-        """Wycisza logi serwera HTTP."""
+        # Wycisza logi serwera HTTP
         pass
 
 class GPSAnalysisThread(QThread):
@@ -65,13 +62,27 @@ class GPSAnalysisThread(QThread):
     progress_update = Signal(int)     
     new_analysis_text = Signal(str) 
     new_position_data = Signal(float, float, float)
+    jamming_analysis_complete = Signal(object, object) 
 
-    def __init__(self, file_paths):
+    def __init__(self, file_paths, power_threshold=120.0):
         super().__init__()
         self.file_paths = file_paths
-        
+        self.power_threshold = power_threshold
+        self.current_buffcnt = 0
+        self.current_lat = 0.0
+        self.current_lon = 0.0
+        self.current_hgt = 0.0
+        self.current_nsat = 0
+        self.current_gdop = 0.0
+        self.current_clk_bias = 0.0
+        self.jamming_detected = False
+        self.jamming_start_sample = None
+        self.jamming_end_sample = None
         self.http_server = None
-        self.http_thread = None 
+        self.http_thread = None
+        self.jamming_thread = None
+        
+        self.jamming_analysis_complete.connect(self.on_jamming_detected) 
         
         try:
             app_dir = os.path.dirname(os.path.abspath(__file__)) 
@@ -85,32 +96,64 @@ class GPSAnalysisThread(QThread):
         
     def process_incoming_data(self, data):
         try:
+            position = data.get('position', {})
+            if position:
+                self.current_buffcnt = position.get('buffcnt', 0)
+                self.current_lat = float(position.get('lat', 0.0))
+                self.current_lon = float(position.get('lon', 0.0))
+                self.current_hgt = float(position.get('hgt', 0.0))
+                self.current_nsat = position.get('nsat', 0)
+                self.current_gdop = float(position.get('gdop', 0.0))
+                self.current_clk_bias = float(position.get('clk_bias', 0.0))
+            
             elapsed = data.get('elapsed_time', 'N/A')
-            time = data.get('time', 'N/A')
-            decoded = data.get('decoded', [])
-            obs_list = []
-            for obs in data.get('observations', []):
-                obs_list.append(f"  PRN: {obs.get('prn')}, SNR: {obs.get('snr')}")
-            obs_text = "\n".join(obs_list)
 
-            text_output = (
-                f"Czas: {time} (Upłynęło: {elapsed}s)\n"
-                f"Dekodowane satelity: {decoded}\n"
-                f"Obserwacje:\n{obs_text}\n"
-                f"--------------------------------"
-            )
+            text_output = f"[{elapsed}, {self.current_lat:.6f}, {self.current_lon:.6f}, {self.current_buffcnt}]"
             self.new_analysis_text.emit(text_output)
             
-            position = data.get('position', {})
-            lat = float(position.get('lat', 0.0))
-            lon = float(position.get('lon', 0.0))
-            hgt = float(position.get('hgt', 0.0))
-            
-            if lat != 0.0 or lon != 0.0:
-                 self.new_position_data.emit(lat, lon, hgt)
-
+            if self.current_lat != 0.0 or self.current_lon != 0.0:
+                 self.new_position_data.emit(self.current_lat, self.current_lon, self.current_hgt)
         except Exception as e:
             print(f"[WORKER] Błąd podczas przetwarzania danych JSON: {e}")
+            
+    def get_current_position_data(self):
+        return {
+            'buffcnt': self.current_buffcnt,
+            'lat': self.current_lat,
+            'lon': self.current_lon,
+            'hgt': self.current_hgt,
+            'nsat': self.current_nsat,
+            'gdop': self.current_gdop,
+            'clk_bias': self.current_clk_bias
+        }
+    
+    def get_current_sample_number(self):
+        return self.current_buffcnt
+
+    def on_jamming_detected(self, start_sample, end_sample):
+        self.jamming_start_sample = start_sample
+        self.jamming_end_sample = end_sample
+        if start_sample is not None:
+            self.jamming_detected = True
+            print(f"\n[JAMMING THREAD] Wykryto jamming: próbki {start_sample} - {end_sample}")
+        else:
+            self.jamming_detected = False
+            print(f"\n[JAMMING THREAD] Nie wykryto jammingu")
+
+    def analyze_jamming_in_background(self, file_path):
+        def jamming_worker():
+            try:
+                print(f"[JAMMING THREAD] Rozpoczynanie analizy jammingu w pliku: {file_path}")
+                jamming_start, jamming_end = analyze_file_for_jamming(file_path, self.power_threshold)
+                print(f"[JAMMING THREAD] Analiza zakończona: start={jamming_start}, end={jamming_end}")
+                self.jamming_analysis_complete.emit(jamming_start, jamming_end)
+            except Exception as e:
+                print(f"[JAMMING THREAD] Błąd podczas analizy jammingu: {e}")
+                self.jamming_analysis_complete.emit(None, None)
+        
+        self.jamming_thread = threading.Thread(target=jamming_worker)
+        self.jamming_thread.daemon = True
+        self.jamming_thread.start()
 
     def run(self):
         _DataReceiverHandler.thread_instance = self
@@ -142,6 +185,7 @@ class GPSAnalysisThread(QThread):
             self.analysis_complete.emit([])
             return
         
+        self.analyze_jamming_in_background(file1)
         try:
             print(f"[WORKER] Uruchamianie analizy {self.gnssdec_path}...")
             print(f"[WORKER] --- WĄTEK CZEKA NA ZAKOŃCZENIE ./gnssdec ---")
@@ -156,11 +200,20 @@ class GPSAnalysisThread(QThread):
             
         finally:
             self.shutdown_server()
-            print("[WORKKID] Wątek zakończył pracę. Odblokowanie UI.")
-            self.analysis_complete.emit([]) # Wysyłamy pustą listę na koniec
+            print("[WORKER] Wątek zakończył pracę. Odblokowanie UI.")
+            
+            if self.jamming_detected:
+                jamming_info = [{
+                    'type': 'jamming',
+                    'start_sample': self.jamming_start_sample,
+                    'end_sample': self.jamming_end_sample
+                }]
+                self.analysis_complete.emit(jamming_info)
+            else:
+                no_jamming_info = [{'type': 'no_jamming'}]
+                self.analysis_complete.emit(no_jamming_info)
 
     def shutdown_server(self):
-        """Bezpiecznie zamyka serwer HTTP."""
         if self.http_server:
             print("[WORKER] Zamykanie serwera HTTP...")
             self.http_server.shutdown() 
@@ -168,3 +221,35 @@ class GPSAnalysisThread(QThread):
             self.http_server = None
             self.http_thread = None
             print("[WORKER] Serwer HTTP zamknięty.")
+        
+        if self.jamming_thread and self.jamming_thread.is_alive():
+            print("[WORKER] Czekam na zakończenie analizy jammingu...")
+            self.jamming_thread.join(timeout=5)
+            if self.jamming_thread.is_alive():
+                print("[WORKER] Analiza jammingu nadal trwa w tle...")
+            else:
+                print("[WORKER] Analiza jammingu zakończona.")
+
+    def use_get_data(self):
+        if self.current_buffcnt > 0:
+            print(f"Aktualny buffcnt: {self.current_buffcnt}")
+            print(f"Pozycja: {self.current_lat}, {self.current_lon}")
+        
+        data = self.get_current_position_data()
+        if data['buffcnt'] > 0:
+            print(f"Kompletne dane: {data}")
+
+
+# PORADNIK DO INNEGO UŻYCIA !!!
+# Przykład użycia analizy jammingu jako multithread:
+# 
+# def on_jamming_result(start_sample, end_sample):
+#     if start_sample is not None:
+#         print(f"Wykryto jamming: próbki {start_sample} - {end_sample}")
+#     else:
+#         print("Nie wykryto jammingu")
+#
+# # Stwórz wątek z progiem mocy 120.0
+# thread = GPSAnalysisThread(["/path/to/file.bin"], power_threshold=120.0)
+# thread.jamming_analysis_complete.connect(on_jamming_result)
+# thread.start()
