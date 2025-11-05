@@ -1,13 +1,13 @@
 import os
 import random
-import subprocess  # <--- DODANE
-import sys         # <--- DODANE
+import subprocess  
+import sys         
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QGroupBox, 
                              QTextEdit, QFileDialog, QProgressBar, 
                              QSpinBox, QDoubleSpinBox)
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer 
 
 from . import config
 from .worker import GPSAnalysisThread
@@ -37,7 +37,6 @@ class MainWindow(QMainWindow):
         try:
             with open("resources/map_template.html", "r", encoding="utf-8") as f:
                 html_template = f.read()
-            # Wstrzyknij stałe z config.py do szablonu HTML
             self.web_view.setHtml(html_template.format(
                 LAT=config.LAT, 
                 LNG=config.LNG, 
@@ -50,11 +49,6 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.web_view, 3)
  
         self.analysis_thread = None
-
-        self.live_track_timer = QTimer(self)
-        self.live_track_timer.timeout.connect(self.update_live_position)
-        self.current_live_lat = config.LAT
-        self.current_live_lng = config.LNG
         
     def create_control_panel(self, main_layout):
         """Tworzy panel kontrolny po lewej stronie"""
@@ -211,36 +205,36 @@ class MainWindow(QMainWindow):
         analysis_group.setStyleSheet(group_style)
         analysis_layout = QVBoxLayout(analysis_group)
 
-        file_layout = QHBoxLayout()
-        self.file_label = QLabel("Brak pliku")
-        self.file_label.setWordWrap(True)
-        self.file_label.setStyleSheet("""
-        QLabel {
-            background-color: #ecf0f1;
-            border: 2px dashed #bdc3c7;
-            border-radius: 5px;
+        self.file_display = QTextEdit()
+        self.file_display.setReadOnly(True)
+        self.file_display.setPlaceholderText("Brak wybranych plików...")
+        self.file_display.setMaximumHeight(80) 
+        self.file_display.setStyleSheet("""
+        QTextEdit {
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
             padding: 8px;
-            font-style: italic;
-            color: #7f8c8d;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            background-color: white;
+            color: #2c3e50;
         }
         """)
-        file_layout.addWidget(self.file_label)
+        analysis_layout.addWidget(self.file_display)
         
-        self.browse_btn = QPushButton("📁 Wybierz plik")
-        self.browse_btn.clicked.connect(self.browse_file)
+        self.browse_btn = QPushButton("📁 Wybierz pliki (maks. 3)") 
+        self.browse_btn.clicked.connect(self.browse_files) 
         self.browse_btn.setStyleSheet(button_style)
-        file_layout.addWidget(self.browse_btn)
-        
-        analysis_layout.addLayout(file_layout)
+        analysis_layout.addWidget(self.browse_btn)
 
         params_layout = QVBoxLayout()
 
-        freq_layout = QHBoxLayout()
-        freq_layout.addWidget(QLabel("Częstotliwość [MHz]:"))
+        params_layout.addWidget(QLabel("Częstotliwość [MHz]:"))
         self.freq_spin = QDoubleSpinBox()
         self.freq_spin.setRange(1500, 1600)
         self.freq_spin.setValue(1575.42) 
         self.freq_spin.setDecimals(2)
+        # --- POPRAWKA WIDOCZNOŚCI ---
         self.freq_spin.setStyleSheet("""
         QDoubleSpinBox {
             border: 2px solid #bdc3c7;
@@ -248,19 +242,20 @@ class MainWindow(QMainWindow):
             padding: 5px;
             font-size: 13px;
             background-color: white;
+            color: #2c3e50; 
         }
         QDoubleSpinBox:focus {
             border-color: #3498db;
         }
         """)
-        freq_layout.addWidget(self.freq_spin)
-        params_layout.addLayout(freq_layout)
+        # --- KONIEC POPRAWKI ---
+        params_layout.addWidget(self.freq_spin) 
 
-        threshold_layout = QHBoxLayout()
-        threshold_layout.addWidget(QLabel("Próg wykrywania [%]:"))
+        params_layout.addWidget(QLabel("Próg wykrywania [%]:"))
         self.threshold_spin = QSpinBox()
         self.threshold_spin.setRange(1, 100)
         self.threshold_spin.setValue(30)
+        # --- POPRAWKA WIDOCZNOŚCI ---
         self.threshold_spin.setStyleSheet("""
         QSpinBox {
             border: 2px solid #bdc3c7;
@@ -268,26 +263,25 @@ class MainWindow(QMainWindow):
             padding: 5px;
             font-size: 13px;
             background-color: white;
+            color: #2c3e50;
         }
         QSpinBox:focus {
             border-color: #3498db;
         }
         """)
-        threshold_layout.addWidget(self.threshold_spin)
-        params_layout.addLayout(threshold_layout)
+        # --- KONIEC POPRAWKI ---
+        params_layout.addWidget(self.threshold_spin) 
         
         analysis_layout.addLayout(params_layout)
 
         self.analyze_btn = QPushButton("🔍 Rozpocznij Analizę")
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.analyze_btn.setStyleSheet(action_button_style)
-        analysis_layout.addWidget(self.analyze_btn)
         
         self.clear_btn = QPushButton("🗑️ Wyczyść Markery")
         self.clear_btn.clicked.connect(self.clear_markers)
         self.clear_btn.setStyleSheet(danger_button_style)
-        analysis_layout.addWidget(self.clear_btn)
-
+        
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setStyleSheet("""
@@ -306,23 +300,15 @@ class MainWindow(QMainWindow):
         analysis_layout.addWidget(self.progress_bar)
         
         layout.addWidget(analysis_group)
-
-        live_group = QGroupBox("Śledzenie na żywo")
-        live_group.setStyleSheet(group_style)
-        live_layout = QHBoxLayout(live_group)
         
-        self.start_live_btn = QPushButton("▶️ Start")
-        self.start_live_btn.clicked.connect(self.start_live_tracking)
-        self.start_live_btn.setStyleSheet(action_button_style) 
-        live_layout.addWidget(self.start_live_btn)
+        action_group = QGroupBox("Działania")
+        action_group.setStyleSheet(group_style)
+        action_layout = QVBoxLayout(action_group)
         
-        self.stop_live_btn = QPushButton("⏹️ Stop")
-        self.stop_live_btn.clicked.connect(self.stop_live_tracking)
-        self.stop_live_btn.setStyleSheet(danger_button_style) 
-        self.stop_live_btn.setEnabled(False) 
-        live_layout.addWidget(self.stop_live_btn)
+        action_layout.addWidget(self.analyze_btn) 
+        action_layout.addWidget(self.clear_btn)   
         
-        layout.addWidget(live_group)
+        layout.addWidget(action_group)
 
         results_group = QGroupBox("Wyniki Analizy")
         results_group.setStyleSheet(group_style)
@@ -346,18 +332,16 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(results_group)
 
-        # --- SEKCJA ZMODYFIKOWANA ---
-        sim_group = QGroupBox("Symulacja") # <--- ZMIENIONY TYTUŁ
+        sim_group = QGroupBox("Symulacja")
         sim_group.setStyleSheet(group_style)
         sim_layout = QVBoxLayout(sim_group)
         
-        self.run_simulation_btn = QPushButton("⚙️ Wygeneruj pliki symulacyjne") # <--- NOWY PRZYCISK
-        self.run_simulation_btn.clicked.connect(self.run_simulation_script) # <--- NOWA METODA
+        self.run_simulation_btn = QPushButton("⚙️ Wygeneruj pliki symulacyjne")
+        self.run_simulation_btn.clicked.connect(self.run_simulation_script) 
         self.run_simulation_btn.setStyleSheet(test_button_style)
         sim_layout.addWidget(self.run_simulation_btn)
         
         layout.addWidget(sim_group)
-        # --- KONIEC SEKCJI ZMODYFIKOWANEJ ---
 
         layout.addStretch()
         
@@ -365,23 +349,36 @@ class MainWindow(QMainWindow):
         """Zmienia warstwę mapy"""
         self.web_view.page().runJavaScript(f"changeMapLayer('{layer_type}');")
         
-    def browse_file(self):
-        """Otwiera dialog wyboru pliku"""
-        file_path, _ = QFileDialog.getOpenFileName(
+    # --- ZMIANA: Dodano limit 3 plików ---
+    def browse_files(self):
+        """Otwiera dialog wyboru wielu plików (limit 3)"""
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self, 
-            "Wybierz plik z danymi GPS", 
+            "Wybierz pliki z danymi GPS (maks. 3)", # Zmieniony tytuł
             "../data/", 
             "Pliki binarne (*.bin);;Wszystkie pliki (*.*)"
         )
         
-        if file_path:
-            self.file_label.setText(os.path.basename(file_path))
-            self.current_file = file_path
+        if file_paths:
+            # --- ZMIANA: Sprawdzenie limitu plików ---
+            if len(file_paths) > 3:
+                self.results_text.setPlainText("BŁĄD: Możesz wybrać maksymalnie 3 pliki.")
+                # Wyczyść stary wybór, jeśli jest niepoprawny
+                if hasattr(self, 'current_files'):
+                    self.current_files.clear()
+                self.file_display.setPlainText("Wybierz maksymalnie 3 pliki.")
+                return 
+            # --- KONIEC ZMIANY ---
+
+            self.current_files = file_paths 
+            basenames = [os.path.basename(p) for p in file_paths]
+            self.file_display.setPlainText("\n".join(basenames))
+    # --- KONIEC ZMIANY ---
         
     def start_analysis(self):
-        """Rozpoczyna analizę pliku GPS"""
-        if not hasattr(self, 'current_file'):
-            self.results_text.setPlainText("Najpierw wybierz plik do analizy!")
+        """Rozpoczyna analizę wybranych plików GPS"""
+        if not hasattr(self, 'current_files') or not self.current_files:
+            self.results_text.setPlainText("Najpierw wybierz plik(i) do analizy!")
             return
             
         if self.analysis_thread and self.analysis_thread.isRunning():
@@ -389,15 +386,17 @@ class MainWindow(QMainWindow):
             return
             
         self.analyze_btn.setEnabled(False)
+        self.clear_btn.setEnabled(False) 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         
-        self.analysis_thread = GPSAnalysisThread(self.current_file)
+        self.analysis_thread = GPSAnalysisThread(self.current_files)
+        
         self.analysis_thread.progress_update.connect(self.update_progress)
         self.analysis_thread.analysis_complete.connect(self.analysis_finished)
         self.analysis_thread.start()
         
-        self.results_text.setPlainText("Rozpoczynam analizę...")
+        self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...")
         
     def update_progress(self, value):
         """Aktualizuje pasek postępu"""
@@ -406,6 +405,7 @@ class MainWindow(QMainWindow):
     def analysis_finished(self, points):
         """Wywoływane po zakończeniu analizy"""
         self.analyze_btn.setEnabled(True)
+        self.clear_btn.setEnabled(True) 
         self.progress_bar.setVisible(False)
         
         if not points:
@@ -417,11 +417,13 @@ class MainWindow(QMainWindow):
             addJammingPoint({point['lat']}, {point['lng']}, {point['strength']}, {point['frequency']});
             """
             self.web_view.page().runJavaScript(js_code)
+            
         high_strength = [p for p in points if p['strength'] > 80]
         medium_strength = [p for p in points if 50 <= p['strength'] <= 80]
         low_strength = [p for p in points if p['strength'] < 50]
         
         summary = f"""ANALIZA ZAKOŃCZONA:
+Przeanalizowano plików: {len(self.current_files)}
 Znaleziono {len(points)} punktów zakłóceń GPS
 
 Wysokie zakłócenia (>80%): {len(high_strength)} punktów
@@ -438,7 +440,7 @@ Parametry analizy:
         self.results_text.setPlainText(summary)
         
     def clear_markers(self):
-        """Czyści wszystkie markery z mapy (w tym ślad na żywo)"""
+        """Czyści wszystkie markery z mapy"""
         self.web_view.page().runJavaScript("clearSignalMarkers();")
         self.results_text.setPlainText("Markery i ślad zostały wyczyszczone.")
         
@@ -472,33 +474,3 @@ Parametry analizy:
                                             f"Interpreter: {python_executable}")
             except Exception as e:
                 self.results_text.setPlainText(f"BŁĄD podczas uruchamiania skryptu:\n{e}")
-
-
-    def start_live_tracking(self):
-        """Rozpoczyna symulację śledzenia na żywo co 3 sekundy"""
-        self.start_live_btn.setEnabled(False)
-        self.stop_live_btn.setEnabled(True)
-
-        self.current_live_lat = config.LAT + random.uniform(-0.01, 0.01)
-        self.current_live_lng = config.LNG + random.uniform(-0.01, 0.01)
-
-        self.update_live_position() 
-        
-        # Ustaw timer na 1000 ms )
-        self.live_track_timer.start(1000)
-        self.results_text.setPlainText("Rozpoczęto śledzenie na żywo (co 1 sek.).")
-        
-    def stop_live_tracking(self):
-        """Zatrzymuje śledzenie na żywo"""
-        self.live_track_timer.stop()
-        self.start_live_btn.setEnabled(True)
-        self.stop_live_btn.setEnabled(False)
-        self.results_text.setPlainText("Zatrzymano śledzenie na żywo.")
-
-    def update_live_position(self):
-        self.current_live_lat += random.uniform(-0.0005, 0.0005)
-        self.current_live_lng += random.uniform(0.0003, 0.001) # Symulacja ruchu na wschód
-        
-        js_code = f"window.updateLivePosition({self.current_live_lat}, {self.current_live_lng});"
-        self.web_view.page().runJavaScript(js_code)
-        
