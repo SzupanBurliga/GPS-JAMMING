@@ -403,7 +403,7 @@ class MainWindow(QMainWindow):
         
     def update_map_position(self, lat, lon):
         if not self.is_map_centered:
-            js_pan_code = f"map.setView([{lat:.8f}, {lon:.8f}], 16);"
+            js_pan_code = f"map.setView([{lat:.8f}, {lon:.8f}], 19);"
             self.web_view.page().runJavaScript(js_pan_code)
             self.is_map_centered = True 
 
