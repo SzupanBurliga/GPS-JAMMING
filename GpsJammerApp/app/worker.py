@@ -106,7 +106,7 @@ class GPSAnalysisThread(QThread):
         self.project_root_dir = os.path.dirname(app_dir)
         
         self.gnssdec_path = os.path.join(
-            self.project_root_dir, "backendhttp", "bin", "gnssdec"
+            self.project_root_dir, "backend", "bin", "gnssdec"
         )
         if self.file_paths:
             self.calculate_file_samples()
