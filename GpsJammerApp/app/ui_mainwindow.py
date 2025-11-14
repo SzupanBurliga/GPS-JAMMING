@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self.analysis_thread = None
         self.is_map_centered = False
         self.selected_satellite_system = 'GPS'  # domyslny system
+        self.jammer_shown = False
         
         # domyslne ustawienia
         self.current_settings = {
@@ -487,6 +488,7 @@ class MainWindow(QMainWindow):
             return
 
         self.clear_markers_silently()
+        self.jammer_shown = False
         self.analyze_btn.setEnabled(False) 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
@@ -522,6 +524,16 @@ class MainWindow(QMainWindow):
             self.progress_bar.setFormat("📐 Triangulacja - obliczanie lokalizacji jammera...")
         elif state == "completed":
             self.progress_bar.setFormat("Analiza zakończona - 100%")
+
+            try:
+                if hasattr(self, 'analysis_thread') and self.analysis_thread:
+                    tri = self.analysis_thread.get_triangulation_result()
+                    if tri and tri.get('success') and not getattr(self, 'jammer_shown', False):
+                        self.on_triangulation_result(tri)
+                        self.jammer_shown = True
+            except Exception as e:
+                print(f"[UI] Błąd przy próbie pokazania pozycji jammera po zakończeniu analizy: {e}")
+
         elif value > 0:
             self.progress_bar.setFormat(f"Analiza: {value}%")
         else:
