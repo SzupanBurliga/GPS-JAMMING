@@ -28,7 +28,6 @@ if __name__ == "__main__":
     icon_path = os.path.join(base_dir, "resources", "icon.png")
     icon = QIcon(icon_path)
     if icon.isNull():
-        print(f"Nie udało się wczytać ikony: {icon_path}")
         fallback_paths = [
             os.path.join(os.path.dirname(__file__), "icon.png"),
             os.path.join(os.path.dirname(__file__), "app", "icon.png"),
@@ -40,8 +39,7 @@ if __name__ == "__main__":
                 if not icon.isNull():
                     print(f"Używam fallback ikony: {fallback_path}")
                     break
-    else:
-        print(f"Ikona załadowana pomyślnie: {icon_path}")
+
     app.setWindowIcon(icon)
     if hasattr(app, "setDesktopFileName"):
         app.setDesktopFileName("gps-jammer-detection")

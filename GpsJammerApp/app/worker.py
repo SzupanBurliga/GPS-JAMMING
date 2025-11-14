@@ -88,6 +88,7 @@ class GPSAnalysisThread(QThread):
         self.estimated_total_samples = 0
         self.triangulation_result = None
         self.jamming_analysis_finished = False 
+        self.triangulation_started = False  
         self.last_position_before_jamming = {
             'lat': 0.0,
             'lon': 0.0,
@@ -111,7 +112,6 @@ class GPSAnalysisThread(QThread):
             self.calculate_file_samples()
         
     def calculate_file_samples(self):
-        """NOWY: Oblicza liczbę próbek w pliku binarnym."""
         try:
             if not self.file_paths or not os.path.exists(self.file_paths[0]):
                 return
@@ -158,24 +158,45 @@ class GPSAnalysisThread(QThread):
                 self.update_progress_bar()
                 
                 if self.current_lat != 0.0 and self.current_lon != 0.0:
-                    if self.jamming_analysis_finished and self.jamming_start_sample is not None:
+                    if self.jamming_analysis_finished and self.jamming_start_sample is not None and not self.triangulation_started:
+                        # Analiza jammingu zakończona - sprawdź czy aktualna próbka jest przed jammingiem
                         if self.current_buffcnt < self.jamming_start_sample:
-                            self.last_position_before_jamming = {
-                                'lat': self.current_lat,
-                                'lon': self.current_lon,
-                                'hgt': self.current_hgt,
-                                'buffcnt': self.current_buffcnt,
-                                'valid': True
-                            }
-                            # print(f"[WORKER] Aktualizacja pozycji przed jammingiem: probka nr {self.current_buffcnt} < {self.jamming_start_sample}")
-                    else:
-                        self.last_position_before_jamming = {
+                            # Sprawdź czy to jest nowsza pozycja niż już zapisana
+                            if (not self.last_position_before_jamming['valid'] or 
+                                self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
+                                self.last_position_before_jamming = {
+                                    'lat': self.current_lat,
+                                    'lon': self.current_lon,
+                                    'hgt': self.current_hgt,
+                                    'buffcnt': self.current_buffcnt,
+                                    'valid': True
+                                }
+                                #print(f"[WORKER] ✅ AKTUALIZACJA ostatniej pozycji przed jammingiem: próbka {self.current_buffcnt} < jamming {self.jamming_start_sample}")
+                                #print(f"[WORKER]    📍 Nowa pozycja: {self.current_lat:.8f}, {self.current_lon:.8f}")
+                    elif not self.triangulation_started:  # ZMIENIONE: Tylko jeśli triangulacja jeszcze nie została uruchomiona
+                        # Analiza jammingu jeszcze trwa - zapisuj pozycję jako kandydata
+                        # (zostanie nadpisana jeśli jamming zostanie wykryty wcześniej)
+                        candidate_position = {
                             'lat': self.current_lat,
                             'lon': self.current_lon,
                             'hgt': self.current_hgt,
                             'buffcnt': self.current_buffcnt,
                             'valid': True
                         }
+                        
+                        # Sprawdź czy już mamy wykryty jamming (może się skończyć w międzyczasie)
+                        if self.jamming_start_sample is not None:
+                            # Jamming już wykryty - sprawdź czy kandydat jest przed jammingiem i czy jest nowszy
+                            if self.current_buffcnt < self.jamming_start_sample:
+                                if (not self.last_position_before_jamming['valid'] or 
+                                    self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
+                                    self.last_position_before_jamming = candidate_position
+                                    print(f"[WORKER] 🔄 AKTUALIZACJA kandydata na ostatnią pozycję: próbka {self.current_buffcnt} < jamming {self.jamming_start_sample}")
+                                    print(f"[WORKER]    📍 Kandydat: {self.current_lat:.8f}, {self.current_lon:.8f}")
+                        else:
+                            # Jamming jeszcze nie wykryty - zapisz jako tymczasowy kandydat (zawsze najnowszy)
+                            self.last_position_before_jamming = candidate_position
+                            # Nie loguj każdej pozycji - za dużo spamu
             
             elapsed = data.get('elapsed_time', 'N/A')
 
@@ -186,9 +207,6 @@ class GPSAnalysisThread(QThread):
             if self.current_lat != 0.0 or self.current_lon != 0.0:
                 if should_update_gui:
                     self.new_position_data.emit(self.current_lat, self.current_lon, self.current_hgt)
-                else:
-                    if self.is_in_jamming_range():
-                        print(f"[WORKER] Pomijam aktualizację GUI podczas jammingu: próbka {self.current_buffcnt}")
         except Exception as e:
             print(f"[WORKER] Błąd podczas przetwarzania danych JSON: {e}")
             
@@ -265,19 +283,27 @@ class GPSAnalysisThread(QThread):
             self.jamming_detected = True
             print(f"\n[JAMMING THREAD] Wykryto jamming: nr probek:  {start_sample} - {end_sample}")
             self.jamming_analysis_finished = True
+            
+            # ZMIENIONE: Sprawdź i wyczyść pozycję jeśli nie jest przed jammingiem
             if self.last_position_before_jamming['valid']:
-                print(f"[JAMMING THREAD] Aktualna pozycja przed jammingiem: "
-                      f"{self.last_position_before_jamming['lat']:.6f}, "
-                      f"{self.last_position_before_jamming['lon']:.6f} "
-                      f"(próbka {self.last_position_before_jamming['buffcnt']})")
-                if self.last_position_before_jamming['buffcnt'] >= start_sample:
-                    print(f"[JAMMING THREAD] OSTRZEŻENIE: Zapisana pozycja ({self.last_position_before_jamming['buffcnt']}) "
-                          f"nie jest przed jammingiem ({start_sample})! Zostanie nadpisana przez gnssdec.")
+                if self.last_position_before_jamming['buffcnt'] < start_sample:
+                    print(f"[JAMMING THREAD] ✅ ZATWIERDZONA pozycja przed jammingiem: "
+                          f"{self.last_position_before_jamming['lat']:.6f}, "
+                          f"{self.last_position_before_jamming['lon']:.6f} "
+                          f"(próbka {self.last_position_before_jamming['buffcnt']} < jamming {start_sample})")
+                else:
+                    print(f"[JAMMING THREAD] ❌ ODRZUCONA pozycja - nie jest przed jammingiem!")
+                    print(f"[JAMMING THREAD]    Pozycja: próbka {self.last_position_before_jamming['buffcnt']} >= jamming {start_sample}")
+                    # Wyczyść pozycję - nie jest przed jammingiem
+                    self.last_position_before_jamming = {
+                        'lat': 0.0, 'lon': 0.0, 'hgt': 0.0, 'buffcnt': 0, 'valid': False
+                    }
+                    print(f"[JAMMING THREAD]    Pozycja wyczyszczona - będzie aktualizowana przez nadchodzące dane gnssdec")
             else:
-                print(f"[JAMMING THREAD] Brak zapisanej pozycji przed jammingiem")
+                print(f"[JAMMING THREAD] ⏳ Brak zapisanej pozycji - będzie aktualizowana przez gnssdec")
             if len(self.file_paths) >= 2:
-                print(f"[JAMMING THREAD] Uruchamiam triangulację z oczekiwaniem na pozycję przed jammingiem...")
-                self.analyze_triangulation_when_ready()
+                print(f"[JAMMING THREAD] Triangulacja będzie uruchomiona PO zakończeniu gnssdec z ostatnią pozycją")
+                # ZMIENIONE: NIE uruchamiamy triangulacji od razu - czekamy na koniec gnssdec
             else:
                 print(f"[JAMMING THREAD] Pominięto triangulację - za mało plików ({len(self.file_paths)})")
                 
@@ -314,12 +340,18 @@ class GPSAnalysisThread(QThread):
         self.triangulation_result = result
         if result['success']:
             geo = result['location_geographic']
-            print(f"\n[TRIANGULATION] Lokalizacja jammera:")
-            print(f" Współrzędne: {geo['lat']:.8f}, {geo['lon']:.8f}")
-            print(f" Odległości: {result['distances']}")
-            print(f" Metoda: {result['num_antennas']}-antenna triangulation")
+            ref_pos = result.get('reference_position')
+            
+            print(f"\n[TRIANGULATION] ✅ TRIANGULACJA ZAKOŃCZONA SUKCESEM:")
+            print(f"[TRIANGULATION]    🎯 Jammer: {geo['lat']:.8f}°N, {geo['lon']:.8f}°E")
+            print(f"[TRIANGULATION]    📏 Odległości: {result['distances']}")
+            print(f"[TRIANGULATION]    📐 Metoda: {result['num_antennas']}-antenna triangulation")
+            
+            if ref_pos:
+                print(f"[TRIANGULATION]    📍 Pozycja referencyjna: {ref_pos['lat']:.8f}, {ref_pos['lon']:.8f}")
+                print(f"[TRIANGULATION]    🔢 Próbka referencyjna: {ref_pos['buffcnt']}")
         else:
-            print(f"\n[TRIANGULATION] Błąd: {result['message']}")
+            print(f"\n[TRIANGULATION] ❌ BŁĄD TRIANGULACJI: {result['message']}")
 
     def analyze_jamming_in_background(self, file_path):
         def jamming_worker():
@@ -380,16 +412,22 @@ class GPSAnalysisThread(QThread):
                 
                 print(f"[TRIANGULATION THREAD] Gotowe do triangulacji po {wait_time}s oczekiwania")
 
+                # NOWE: Zablokuj dalsze aktualizacje pozycji - triangulacja używa aktualnej pozycji
+                final_position = self.last_position_before_jamming.copy()
+                print(f"[TRIANGULATION THREAD] 🔒 ZABLOKOWANIE pozycji referencyjnej: {final_position['lat']:.8f}, {final_position['lon']:.8f} (próbka {final_position['buffcnt']})")
+
                 print(f"[TRIANGULATION THREAD] Rozpoczynanie triangulacji z {len(self.file_paths)} plikami...")
                 
                 test_files = self.get_test_files_for_triangulation()
                 print(f"[TRIANGULATION THREAD] Używam plików triangulacji: {[os.path.basename(f) for f in test_files]}")
                 
-                if self.last_position_before_jamming['valid']:
-                    ref_lat = self.last_position_before_jamming['lat']
-                    ref_lon = self.last_position_before_jamming['lon']
-                    print(f"[TRIANGULATION THREAD] Punkt referencyjny (pozycja przed jammingiem): {ref_lat:.6f}, {ref_lon:.6f}")
-                    print(f"[TRIANGULATION THREAD] Próbka referencyjna: {self.last_position_before_jamming['buffcnt']} (jamming start: {self.jamming_start_sample})")
+                if final_position['valid']:
+                    ref_lat = final_position['lat']
+                    ref_lon = final_position['lon']
+                    print(f"[TRIANGULATION THREAD] 🎯 FINALNA POZYCJA REFERENCYJNA:")
+                    print(f"[TRIANGULATION THREAD]    Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
+                    print(f"[TRIANGULATION THREAD]    Próbka: {final_position['buffcnt']} (ostatnia przed jamming {self.jamming_start_sample})")
+                    print(f"[TRIANGULATION THREAD]    Różnica: {self.jamming_start_sample - final_position['buffcnt']} próbek przed jammingiem")
                 else:
                     ref_lat = self.current_lat if self.current_lat != 0.0 else 50.06143
                     ref_lon = self.current_lon if self.current_lon != 0.0 else 19.93658
@@ -409,11 +447,11 @@ class GPSAnalysisThread(QThread):
                 
                 print(f"[TRIANGULATION THREAD] Triangulacja zakończona: sukces={result['success']}")
                 
-                if result['success'] and self.last_position_before_jamming['valid']:
+                if result['success'] and final_position['valid']:
                     result['reference_position'] = {
-                        'lat': self.last_position_before_jamming['lat'],
-                        'lon': self.last_position_before_jamming['lon'],
-                        'buffcnt': self.last_position_before_jamming['buffcnt']
+                        'lat': final_position['lat'],
+                        'lon': final_position['lon'],
+                        'buffcnt': final_position['buffcnt']
                     }
                 
                 self.triangulation_complete.emit(result)
@@ -449,17 +487,34 @@ class GPSAnalysisThread(QThread):
                 
                 test_files = self.get_test_files_for_triangulation()
                 print(f"[TRIANGULATION THREAD] Używam plików triangulacji: {[os.path.basename(f) for f in test_files]}")
-
-                if self.last_position_before_jamming['valid']:
-                    ref_lat = self.last_position_before_jamming['lat']
-                    ref_lon = self.last_position_before_jamming['lon']
-                    print(f"[TRIANGULATION THREAD] Punkt referencyjny (ostatnia pozycja przed jammingiem): {ref_lat:.6f}, {ref_lon:.6f}")
-                    print(f"[TRIANGULATION THREAD] Próbka referencyjna: {self.last_position_before_jamming['buffcnt']}")
+                final_position = None
+                
+                if self.jamming_detected and self.last_position_before_jamming['valid']:
+                    final_position = self.last_position_before_jamming.copy()
+                    ref_lat = final_position['lat']
+                    ref_lon = final_position['lon']
+                    #print(f"[TRIANGULATION THREAD]   FINALNA POZYCJA REFERENCYJNA (przed jammingiem):")
+                    #print(f"[TRIANGULATION THREAD]    Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
+                    #print(f"[TRIANGULATION THREAD]    Próbka: {final_position['buffcnt']} (ostatnia przed jamming {self.jamming_start_sample})")
+                    #print(f"[TRIANGULATION THREAD]    Różnica: {self.jamming_start_sample - final_position['buffcnt']} próbek przed jammingiem")
+                elif self.current_lat != 0.0 and self.current_lon != 0.0:
+                    final_position = {
+                        'lat': self.current_lat,
+                        'lon': self.current_lon,
+                        'hgt': self.current_hgt,
+                        'buffcnt': self.current_buffcnt,
+                        'valid': True
+                    }
+                    ref_lat = final_position['lat']
+                    ref_lon = final_position['lon']
+                    print(f"[TRIANGULATION THREAD] 🎯 FINALNA POZYCJA REFERENCYJNA (ostatnia z gnssdec):")
+                    print(f"[TRIANGULATION THREAD]    Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
+                    print(f"[TRIANGULATION THREAD]    Próbka: {final_position['buffcnt']} (ostatnia z gnssdec)")
                 else:
-                    ref_lat = self.current_lat if self.current_lat != 0.0 else 50.06143
-                    ref_lon = self.current_lon if self.current_lon != 0.0 else 19.93658
+                    ref_lat = 50.06143
+                    ref_lon = 19.93658
                     print(f"[TRIANGULATION THREAD] Punkt referencyjny (fallback): {ref_lat:.6f}, {ref_lon:.6f}")
-                    print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji przed jammingiem!")
+                    print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji!")
 
                 result = triangulate_jammer_location(
                     file_paths=test_files,
@@ -474,11 +529,11 @@ class GPSAnalysisThread(QThread):
                 
                 print(f"[TRIANGULATION THREAD] Triangulacja zakończona: sukces={result['success']}")
 
-                if result['success'] and self.last_position_before_jamming['valid']:
+                if result['success'] and final_position and final_position['valid']:
                     result['reference_position'] = {
-                        'lat': self.last_position_before_jamming['lat'],
-                        'lon': self.last_position_before_jamming['lon'],
-                        'buffcnt': self.last_position_before_jamming['buffcnt']
+                        'lat': final_position['lat'],
+                        'lon': final_position['lon'],
+                        'buffcnt': final_position['buffcnt']
                     }
                 
                 self.triangulation_complete.emit(result)
@@ -541,27 +596,34 @@ class GPSAnalysisThread(QThread):
             print(f"Nieoczekiwany błąd podczas uruchamiania gnssdec: {e}")
             
         finally:
-            # Ustaw pasek progresu na 100% po zakończeniu
             self.progress_update.emit(100, "completed")
             
             self.shutdown_server()
             print("[WORKER] Analiza gnssdec zakończona.")
-
+            triangulation_completed = False
+            
             if self.triangulation_thread and self.triangulation_thread.is_alive():
                 print("[WORKER] Czekanie na zakończenie triangulacji (uruchomionej równolegle)...")
-                self.triangulation_thread.join(timeout=15) 
+                self.triangulation_thread.join(timeout=20) 
                 if self.triangulation_thread.is_alive():
                     print("[WORKER] OSTRZEŻENIE: Triangulacja nadal trwa w tle!")
                 else:
                     print("[WORKER] Triangulacja równoległa zakończona.")
+                    triangulation_completed = True
+            elif len(self.file_paths) >= 2:
+                print("[WORKER] Uruchamiam triangulację po zakończeniu gnssdec z ostatnią pozycją...")
+                self.triangulation_started = True
+                self.analyze_triangulation_after_gnssdec()
+                if self.triangulation_thread:
+                    print("[WORKER] Czekam na zakończenie triangulacji...")
+                    self.triangulation_thread.join(timeout=25)  
+                    if self.triangulation_thread.is_alive():
+                        print("[WORKER] OSTRZEŻENIE: Triangulacja nadal trwa!")
+                    else:
+                        print("[WORKER] Triangulacja zakończona.")
+                        triangulation_completed = True
             else:
-                if len(self.file_paths) >= 2 and not self.jamming_detected:
-                    print("[WORKER] Brak jammingu - uruchamiam triangulację po zakończeniu gnssdec...")
-                    self.analyze_triangulation_after_gnssdec()
-                    if self.triangulation_thread:
-                        self.triangulation_thread.join(timeout=15)
-                else:
-                    print("[WORKER] Triangulacja nie jest potrzebna lub już została uruchomiona równolegle.")
+                print("[WORKER] Pominięto triangulację - za mało plików.")
             
             print("[WORKER] Wątek zakończył pracę. Odblokowanie UI.")
 
@@ -599,7 +661,7 @@ class GPSAnalysisThread(QThread):
         
         if self.triangulation_thread and self.triangulation_thread.is_alive():
             print("[WORKER] Czekam na zakończenie triangulacji...")
-            self.triangulation_thread.join(timeout=10
+            self.triangulation_thread.join(timeout=10)  # triangulacja moze trwac dluzej
             if self.triangulation_thread.is_alive():
                 print("[WORKER] Triangulacja nadal trwa w tle...")
             else:

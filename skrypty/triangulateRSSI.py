@@ -141,39 +141,7 @@ def triangulate_jammer_location(file_paths,
                               frequency_mhz=DEFAULT_SIGNAL_FREQUENCY_MHZ,
                               threshold=DEFAULT_SIGNAL_THRESHOLD,
                               verbose=False):
-    """
-    Główna funkcja do triangulacji lokalizacji jammera na podstawie plików RSSI.
-    
-    Args:
-        file_paths: lista 2 lub 3 ścieżek do plików IQ
-        antenna_positions_meters: pozycje anten w metrach [(x0,y0), (x1,y1), (x2,y2)] lub None dla domyślnych
-        reference_lat: szerokość geograficzna referencyjna (środek układu współrzędnych)
-        reference_lon: długość geograficzna referencyjna (środek układu współrzędnych)
-        tx_power: moc nadajnika w dBm
-        path_loss_exp: wykładnik tłumienia ścieżki
-        frequency_mhz: częstotliwość sygnału w MHz
-        threshold: próg detekcji sygnału
-        verbose: czy wypisywać szczegółowe informacje
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'distances': [dist0, dist1, dist2/None],
-            'location_meters': [x, y] lub None,
-            'location_geographic': {
-                'lat': float,
-                'lon': float,
-                'lat_offset_degrees': float,
-                'lon_offset_degrees': float,
-                'lat_offset_minutes': float,
-                'lon_offset_minutes': float
-            } lub None,
-            'message': str,
-            'num_antennas': int
-        }
-    """
-    
-    # Sprawdź liczbę plików
+
     if len(file_paths) < 2 or len(file_paths) > 3:
         return {
             'success': False,
@@ -238,12 +206,19 @@ def triangulate_jammer_location(file_paths,
         )
         
         if intersections:
-            # Wybierz punkt bliższy centrum (0,0) - można zmienić logikę
+            # POPRAWIONE: Zwróć informację o obu możliwych lokalizacjach
             loc1, loc2 = intersections
             dist1 = np.linalg.norm(loc1)
             dist2 = np.linalg.norm(loc2)
+            
+            # Dla kompatybilności wstecznej wybieramy jeden punkt (można zmienić logikę)
+            # UWAGA: To może być nieprawidłowy punkt! Użytkownik powinien sprawdzić oba.
             location = loc1 if dist1 <= dist2 else loc2
-            message = f'Bilateracja dla 2 anten - 2 możliwe lokalizacje, wybrano bliższą centrum: x={location[0]:.2f}m, y={location[1]:.2f}m'
+            
+            message = f'Bilateracja dla 2 anten - 2 możliwe lokalizacje: ' + \
+                     f'LOK1: x={loc1[0]:.2f}m, y={loc1[1]:.2f}m | ' + \
+                     f'LOK2: x={loc2[0]:.2f}m, y={loc2[1]:.2f}m | ' + \
+                     f'Wybrano LOK{"1" if dist1 <= dist2 else "2"} (bliższą centrum - może być błędne!)'
         else:
             # Brak przecięcia - estymacja
             location = find_best_estimate_no_intersection(
@@ -269,7 +244,8 @@ def triangulate_jammer_location(file_paths,
     absolute_lat = reference_lat + delta_lat_deg
     absolute_lon = reference_lon + delta_lon_deg
     
-    return {
+    # NOWE: Dodaj informację o alternatywnych lokalizacjach dla 2 anten
+    result = {
         'success': True,
         'distances': distances,
         'location_meters': location.tolist(),
@@ -284,6 +260,37 @@ def triangulate_jammer_location(file_paths,
         'message': message,
         'num_antennas': len(file_paths)
     }
+    
+    # Dodaj alternatywne lokalizacje dla przypadku 2 anten z przecięciem
+    if len(file_paths) == 2 and 'intersections' in locals() and intersections:
+        loc1, loc2 = intersections
+        
+        # Konwertuj oba punkty na współrzędne geograficzne
+        delta_lat1, delta_lon1, _, _ = meters_to_geographic_degrees(loc1[0], loc1[1], reference_lat)
+        delta_lat2, delta_lon2, _, _ = meters_to_geographic_degrees(loc2[0], loc2[1], reference_lat)
+        
+        result['alternative_locations'] = [
+            {
+                'location_meters': loc1.tolist(),
+                'location_geographic': {
+                    'lat': reference_lat + delta_lat1,
+                    'lon': reference_lon + delta_lon1,
+                    'lat_offset_degrees': delta_lat1,
+                    'lon_offset_degrees': delta_lon1
+                }
+            },
+            {
+                'location_meters': loc2.tolist(),
+                'location_geographic': {
+                    'lat': reference_lat + delta_lat2,
+                    'lon': reference_lon + delta_lon2,
+                    'lat_offset_degrees': delta_lat2,
+                    'lon_offset_degrees': delta_lon2
+                }
+            }
+        ]
+    
+    return result
 
 #   MAIN - przykład użycia
 
@@ -332,12 +339,22 @@ if __name__ == "__main__":
     if result_2ant['success']:
         loc_geo = result_2ant['location_geographic']
         print("✅ SUKCES!")
-        print(f"📍 Lokalizacja jammera:")
+        print(f"📍 Wybrana lokalizacja jammera:")
         print(f"   Współrzędne geograficzne: {loc_geo['lat']:.8f}°N, {loc_geo['lon']:.8f}°E")
         print(f"   Przesunięcie: {loc_geo['lat_offset_degrees']:.6f}° ({loc_geo['lat_offset_minutes']:.2f}') lat")
         print(f"                 {loc_geo['lon_offset_degrees']:.6f}° ({loc_geo['lon_offset_minutes']:.2f}') lon")
         print(f"   W metrach: x={result_2ant['location_meters'][0]:.2f}m, y={result_2ant['location_meters'][1]:.2f}m")
         print(f"📏 Odległości: {result_2ant['distances']}")
+        
+        # Pokaż alternatywne lokalizacje jeśli są dostępne
+        if 'alternative_locations' in result_2ant:
+            print(f"\n🔄 UWAGA: Dla 2 anten istnieją 2 możliwe lokalizacje!")
+            for i, alt_loc in enumerate(result_2ant['alternative_locations'], 1):
+                alt_geo = alt_loc['location_geographic']
+                alt_meters = alt_loc['location_meters']
+                print(f"   Opcja {i}: {alt_geo['lat']:.8f}°N, {alt_geo['lon']:.8f}°E")
+                print(f"           (x={alt_meters[0]:.2f}m, y={alt_meters[1]:.2f}m)")
+            print("   💡 Użyj trzeciej anteny dla jednoznacznego określenia lokalizacji!")
     else:
         print("❌ BŁĄD:", result_2ant['message'])
 
