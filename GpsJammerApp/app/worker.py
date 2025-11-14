@@ -126,12 +126,7 @@ class GPSAnalysisThread(QThread):
                 if samples_int16 > 100000:
                     self.total_samples = samples_int16
                     bytes_per_sample = 4
-                    print(f"[PROGRESS] Wykryto format: int16 I/Q (4 bajty/próbka)")
-                else:
-                    print(f"[PROGRESS] Wykryto format: int8 I/Q (2 bajty/próbka)")
-            else:
-                print(f"[PROGRESS] Wykryto format: int8 I/Q (2 bajty/próbka)")
-            
+                    
             self.estimated_total_samples = self.total_samples
             
             print(f"[PROGRESS] Plik: {os.path.basename(file_path)}")
@@ -381,38 +376,45 @@ class GPSAnalysisThread(QThread):
                     })
                     return
 
-                print(f"[TRIANGULATION THREAD] Czekam na wykrycie jammingu i prawidłową pozycję przed jammingiem...")
+                print(f"[TRIANGULATION THREAD] Czekam na wykrycie jammingu i na to, by gnssdec przetworzył próbki do miejsca jammingu...")
                 import time
-                wait_time = 0
-                
-                while True:
-                    if not self.jamming_detected or self.jamming_start_sample is None:
-                        time.sleep(0.5)
-                        wait_time += 0.5
-                        
-                        if wait_time % 10 == 0: 
-                            print(f"[TRIANGULATION THREAD] Czekam na wykrycie jammingu... ({wait_time}s)")
-                        continue
-                    
-                    if (self.last_position_before_jamming['valid'] and 
-                        self.last_position_before_jamming['buffcnt'] < self.jamming_start_sample):
-                        print(f"[TRIANGULATION THREAD] Jamming wykryty i pozycja przed jammingiem gotowa!")
-                        print(f"[TRIANGULATION THREAD] Pozycja próbka: {self.last_position_before_jamming['buffcnt']} < jamming start: {self.jamming_start_sample}")
-                        break
-                    
+                wait_time = 0.0
+
+                # Najpierw poczekaj aż wykryty zostanie jamming (start_sample ustawiony).
+                while not (self.jamming_detected and self.jamming_start_sample is not None):
                     time.sleep(0.5)
                     wait_time += 0.5
-                    
-                    if wait_time % 10 == 0:
-                        if self.last_position_before_jamming['valid']:
-                            print(f"[TRIANGULATION THREAD] Jamming wykryty, czekam na pozycję przed jammingiem... ({wait_time}s)")
-                            print(f"[TRIANGULATION THREAD]   Aktualna pozycja: próbka {self.last_position_before_jamming['buffcnt']}, jamming start: {self.jamming_start_sample}")
-                        else:
-                            print(f"[TRIANGULATION THREAD] Jamming wykryty, czekam na jakąkolwiek pozycję... ({wait_time}s)")
+                    if int(wait_time) % 10 == 0:
+                        print(f"[TRIANGULATION THREAD] Czekam na wykrycie jammingu... ({wait_time:.0f}s)")
+
+                # Gdy znamy numer próbki startu jammigu, poczekaj aż gnssdec
+                # przetworzy próbki co najmniej do tej próbki (current_buffcnt >= start_sample).
+                # Dzięki temu last_position_before_jamming będzie MAAKSYMALNĄ dostępną próbka < start_sample.
+                start_sample = self.jamming_start_sample
+                print(f"[TRIANGULATION THREAD] Jamming wykryty: start_sample={start_sample}. Czekam na aktualizacje pozycji z gnssdec...")
+
+                while self.current_buffcnt < start_sample:
+                    time.sleep(0.5)
+                    wait_time += 0.5
+                    # co 10s loguj status
+                    if int(wait_time) % 10 == 0:
+                        print(f"[TRIANGULATION THREAD] Czekam aż gnssdec osiągnie próbkę {start_sample}... (current_buffcnt={self.current_buffcnt}, waited={wait_time:.0f}s)")
+                    # Safety: jeśli czekamy bardzo długo (np. >120s), przerwij i użyj najlepszej dostępnej pozycji
+                    if wait_time > 120:
+                        print(f"[TRIANGULATION THREAD] Oczekiwanie przekroczyło 120s — używam najlepszej dostępnej pozycji przed jammigem.")
+                        break
+
+                if self.last_position_before_jamming['valid']:
+                    print(f"[TRIANGULATION THREAD] Jamming wykryty i posiadam pozycję przed jammingiem: próbka {self.last_position_before_jamming['buffcnt']} < jamming start: {start_sample}")
+                else:
+                    print(f"[TRIANGULATION THREAD] Brak zapisanej pozycji przed jammingiem — użyję fallbacku po current_lat/current_lon lub pozycji domyślnej")
                 
                 print(f"[TRIANGULATION THREAD] Gotowe do triangulacji po {wait_time}s oczekiwania")
 
-                # NOWE: Zablokuj dalsze aktualizacje pozycji - triangulacja używa aktualnej pozycji
+                # Zablokuj dalsze aktualizacje pozycji - triangulacja używa aktualnej pozycji
+                # Ustaw flagę triangulation_started żeby proces_incoming_data przestał
+                # nadpisywać kandydata na ostatnią pozycję przed jammigem.
+                self.triangulation_started = True
                 final_position = self.last_position_before_jamming.copy()
                 print(f"[TRIANGULATION THREAD] 🔒 ZABLOKOWANIE pozycji referencyjnej: {final_position['lat']:.8f}, {final_position['lon']:.8f} (próbka {final_position['buffcnt']})")
 
@@ -582,10 +584,16 @@ class GPSAnalysisThread(QThread):
             self.analysis_complete.emit([])
             return
         self.analyze_jamming_in_background(file1)
+        # Jeśli mamy przynajmniej 2 pliki, uruchamiamy wątek triangulacji
+        # w trybie "czekaj/polluj" — wątek sam odczeka na ostatnią pozycję
+        # sprzed jammigu przesyłaną przez gnssdec i dopiero wtedy zacznie
+        # wykonywać triangulację. Dzięki temu triangulacja działa równolegle
+        # i nie czekamy blokująco na zakończenie procesu gnssdec.
+        if len(self.file_paths) >= 2:
+            self.analyze_triangulation_when_ready()
         
         try:
             print(f"[WORKER] Uruchamianie analizy {self.gnssdec_path}...")
-            print(f"[WORKER] --- WĄTEK CZEKA NA ZAKOŃCZENIE ./gnssdec ---")
             gnssdec_command = [self.gnssdec_path, file1]
             result = subprocess.run(gnssdec_command, check=True, capture_output=True, text=True)
             print(f"[WORKER] Analiza {self.gnssdec_path} zakończona.")
@@ -610,9 +618,8 @@ class GPSAnalysisThread(QThread):
                 else:
                     print("[WORKER] Triangulacja równoległa zakończona.")
                     triangulation_completed = True
-            elif len(self.file_paths) >= 2:
-                print("[WORKER] Uruchamiam triangulację po zakończeniu gnssdec z ostatnią pozycją...")
-                self.triangulation_started = True
+            elif len(self.file_paths) >= 2 and not self.triangulation_started:
+                print("[WORKER] Uruchamiam triangulację")
                 self.analyze_triangulation_after_gnssdec()
                 if self.triangulation_thread:
                     print("[WORKER] Czekam na zakończenie triangulacji...")
@@ -622,9 +629,7 @@ class GPSAnalysisThread(QThread):
                     else:
                         print("[WORKER] Triangulacja zakończona.")
                         triangulation_completed = True
-            else:
-                print("[WORKER] Pominięto triangulację - za mało plików.")
-            
+
             print("[WORKER] Wątek zakończył pracę. Odblokowanie UI.")
 
             if self.jamming_detected:
@@ -638,7 +643,7 @@ class GPSAnalysisThread(QThread):
             else:
                 result_info = [{
                     'type': 'no_jamming',
-                    'triangulation': self.triangulation_result  # Triangulacja nawet bez jammingu
+                    'triangulation': self.triangulation_result
                 }]
                 self.analysis_complete.emit(result_info)
 
