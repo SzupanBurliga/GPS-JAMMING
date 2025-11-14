@@ -4,11 +4,12 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
 from PySide6.QtCore import Qt
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, num_files=0):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia Analizy GPS")
         self.setModal(True)
         self.resize(400, 350)
+        self.num_files = num_files
         
         self.setStyleSheet("""
         QDialog {
@@ -48,10 +49,14 @@ class SettingsDialog(QDialog):
         antenna_layout.addWidget(QLabel("<b>X [m]</b>"), 0, 1)
         antenna_layout.addWidget(QLabel("<b>Y [m]</b>"), 0, 2)
 
-        antenna_layout.addWidget(QLabel("Antena 1 (ref):"), 1, 0)
-        antenna_layout.addWidget(QLabel("0.0"), 1, 1)
-        antenna_layout.addWidget(QLabel("0.0"), 1, 2)
-        antenna_layout.addWidget(QLabel("Antena 2:"), 2, 0)
+        self.antenna1_label = QLabel("Antena 1 (ref):")
+        antenna_layout.addWidget(self.antenna1_label, 1, 0)
+        self.antenna1_x_label = QLabel("0.0")
+        antenna_layout.addWidget(self.antenna1_x_label, 1, 1)
+        self.antenna1_y_label = QLabel("0.0")
+        antenna_layout.addWidget(self.antenna1_y_label, 1, 2)
+        self.antenna2_label = QLabel("Antena 2:")
+        antenna_layout.addWidget(self.antenna2_label, 2, 0)
         self.antenna2_x = QDoubleSpinBox()
         self.antenna2_x.setRange(-50.0, 50.0)
         self.antenna2_x.setValue(0.5)
@@ -67,7 +72,8 @@ class SettingsDialog(QDialog):
         self.antenna2_y.setStyleSheet(self.get_spinbox_style())
         antenna_layout.addWidget(self.antenna2_y, 2, 2)
         
-        antenna_layout.addWidget(QLabel("Antena 3:"), 3, 0)
+        self.antenna3_label = QLabel("Antena 3:")
+        antenna_layout.addWidget(self.antenna3_label, 3, 0)
         self.antenna3_x = QDoubleSpinBox()
         self.antenna3_x.setRange(-50.0, 50.0)
         self.antenna3_x.setValue(0.0)  
@@ -84,36 +90,51 @@ class SettingsDialog(QDialog):
         self.antenna3_y.setStyleSheet(self.get_spinbox_style())
         antenna_layout.addWidget(self.antenna3_y, 3, 2)
         
+        # Ustawienie stanu enabled/disabled dla anten na podstawie liczby plików
+        self.update_antenna_state()
+        
         layout.addWidget(antenna_group)
 
         analysis_group = QGroupBox("Parametry Analizy")
         analysis_layout = QGridLayout(analysis_group)
+        analysis_layout.setVerticalSpacing(15)
 
-        analysis_layout.addWidget(QLabel("Częstotliwość [MHz]:"), 0, 0)
-        self.frequency = QDoubleSpinBox()
-        self.frequency.setRange(1500, 1600)
-        self.frequency.setValue(1575.42)  
-        self.frequency.setDecimals(2)
-        self.frequency.setSuffix(" MHz")
-        self.frequency.setStyleSheet(self.get_spinbox_style())
-        analysis_layout.addWidget(self.frequency, 0, 1)
+        analysis_layout.addWidget(QLabel("Częstotliwość:"), 0, 0)
+        analysis_layout.addWidget(QLabel("1575.42 MHz"), 0, 1)
 
-        analysis_layout.addWidget(QLabel("Próg wykrywania [%]:"), 1, 0)
-        self.threshold = QSpinBox()
-        self.threshold.setRange(1, 100)
-        self.threshold.setValue(30)
-        self.threshold.setSuffix(" %")
+        analysis_layout.addWidget(QLabel("Częstotliwość próbkowania:"), 1, 0)
+        analysis_layout.addWidget(QLabel("2.048 MHz"), 1, 1)
+
+        analysis_layout.addWidget(QLabel("Próg Detekcji (względny):"), 2, 0)
+        self.threshold = QDoubleSpinBox()
+        self.threshold.setRange(1.0, 5000.0)
+        self.threshold.setValue(30.0)
+        self.threshold.setDecimals(1)
+        self.threshold.setSingleStep(1.0)
         self.threshold.setStyleSheet(self.get_spinbox_style())
-        analysis_layout.addWidget(self.threshold, 1, 1)
-
-        analysis_layout.addWidget(QLabel("Częst. próbkowania [MHz]:"), 2, 0)
-        self.sample_rate = QDoubleSpinBox()
-        self.sample_rate.setRange(1, 50)
-        self.sample_rate.setValue(2.048)
-        self.sample_rate.setDecimals(3)
-        self.sample_rate.setSuffix(" MHz")
-        self.sample_rate.setStyleSheet(self.get_spinbox_style())
-        analysis_layout.addWidget(self.sample_rate, 2, 1)
+        analysis_layout.addWidget(self.threshold, 2, 1)
+        
+        self.calibrate_btn = QPushButton("Oblicz próg")
+        self.calibrate_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        QPushButton:hover {
+            background-color: #2980b9;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+        QPushButton:pressed {
+            background-color: #21618c;
+        }
+        """)
+        analysis_layout.addWidget(self.calibrate_btn, 3, 0, 1, 2)
         
         layout.addWidget(analysis_group)
         
@@ -168,6 +189,56 @@ class SettingsDialog(QDialog):
         
         layout.addLayout(button_layout)
     
+    def update_antenna_state(self):
+        """Aktualizuje stan enabled/disabled pól anten na podstawie liczby plików."""
+        disabled_label_style = "color: #95a5a6;"  # Szary kolor dla wyłączonych napisów
+        enabled_label_style = "color: #2c3e50; font-weight: bold;"  # Normalny kolor dla aktywnych
+        
+        if self.num_files == 0:
+            # Brak plików - wszystkie pola wyłączone
+            self.antenna1_label.setStyleSheet(disabled_label_style)
+            self.antenna1_x_label.setStyleSheet(disabled_label_style)
+            self.antenna1_y_label.setStyleSheet(disabled_label_style)
+            self.antenna2_label.setStyleSheet(disabled_label_style)
+            self.antenna3_label.setStyleSheet(disabled_label_style)
+            self.antenna2_x.setEnabled(False)
+            self.antenna2_y.setEnabled(False)
+            self.antenna3_x.setEnabled(False)
+            self.antenna3_y.setEnabled(False)
+        elif self.num_files == 1:
+            # 1 plik - Antena 1 normalna z wartościami; triangulacja wymaga min. 2 plików
+            self.antenna1_label.setStyleSheet(enabled_label_style)
+            self.antenna1_x_label.setStyleSheet(enabled_label_style)
+            self.antenna1_y_label.setStyleSheet(enabled_label_style)
+            self.antenna2_label.setStyleSheet(disabled_label_style)
+            self.antenna3_label.setStyleSheet(disabled_label_style)
+            self.antenna2_x.setEnabled(False)
+            self.antenna2_y.setEnabled(False)
+            self.antenna3_x.setEnabled(False)
+            self.antenna3_y.setEnabled(False)
+        elif self.num_files == 2:
+            # 2 pliki - tylko antena 2 dostępna
+            self.antenna1_label.setStyleSheet(enabled_label_style)
+            self.antenna1_x_label.setStyleSheet(enabled_label_style)
+            self.antenna1_y_label.setStyleSheet(enabled_label_style)
+            self.antenna2_label.setStyleSheet(enabled_label_style)
+            self.antenna3_label.setStyleSheet(disabled_label_style)
+            self.antenna2_x.setEnabled(True)
+            self.antenna2_y.setEnabled(True)
+            self.antenna3_x.setEnabled(False)
+            self.antenna3_y.setEnabled(False)
+        else:
+            # 3 lub więcej plików - antena 2 i 3 dostępne
+            self.antenna1_label.setStyleSheet(enabled_label_style)
+            self.antenna1_x_label.setStyleSheet(enabled_label_style)
+            self.antenna1_y_label.setStyleSheet(enabled_label_style)
+            self.antenna2_label.setStyleSheet(enabled_label_style)
+            self.antenna3_label.setStyleSheet(enabled_label_style)
+            self.antenna2_x.setEnabled(True)
+            self.antenna2_y.setEnabled(True)
+            self.antenna3_x.setEnabled(True)
+            self.antenna3_y.setEnabled(True)
+    
     def get_spinbox_style(self):
         """Zwraca styl dla pól SpinBox."""
         return """
@@ -182,6 +253,11 @@ class SettingsDialog(QDialog):
         }
         QDoubleSpinBox:focus, QSpinBox:focus {
             border-color: #3498db;
+        }
+        QDoubleSpinBox:disabled, QSpinBox:disabled {
+            background-color: #ecf0f1;
+            color: #95a5a6;
+            border-color: #bdc3c7;
         }
         """
     
@@ -210,9 +286,9 @@ class SettingsDialog(QDialog):
                 '2_to_3': distance_23
             },
             'analysis_params': {
-                'frequency': self.frequency.value(),
-                'threshold': self.threshold.value(),
-                'sample_rate': self.sample_rate.value()
+                'frequency': 1575.42,
+                'threshold': int(self.threshold.value()),
+                'sample_rate': 2.048
             }
         }
     
@@ -231,6 +307,5 @@ class SettingsDialog(QDialog):
         
         if 'analysis_params' in settings:
             params = settings['analysis_params']
-            self.frequency.setValue(params.get('frequency', 1575.42))
-            self.threshold.setValue(params.get('threshold', 30))
-            self.sample_rate.setValue(params.get('sample_rate', 2.048))
+            threshold_value = params.get('threshold', 30)
+            self.threshold.setValue(float(threshold_value))

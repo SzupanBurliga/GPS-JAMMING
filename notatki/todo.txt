@@ -1,9 +1,7 @@
 do zrobienia: (ASAP)
-- zrobić funkcjonalne ustawienia (tak, żeby działało - usunąć częstotliwość, próbkowanie, ten próg do ustawienia w wykrywaniu jammingu)
 
 to na końcu
-- usunąć te wszystkie useless komentarze i notatki
-- jednym słowem posprzątać
+- usunąć te wszystkie useless komentarze i notatki, jednym słowem posprzątać
 
 Plan 200%
 - dodać generowanie sygnałów Galileo, Glonass w symulacjach
@@ -11,9 +9,9 @@ Plan 200%
 
 
 W trakcie:
-- naprawić skrypt tak, żeby odpalał się thread kamila zanim się skończy analiza (logike poprawić)
-
+- zrobić funkcjonalne ustawienia (tak, żeby działało - usunąć częstotliwość, próbkowanie, ten próg do ustawienia w wykrywaniu jammingu)
 
 Gotowe:
 - naprawić mape (tam małe poprawki :)) (GOTOWE!!)
-- zrobić jeszcze tak, żeby było to dostępne dla 2 plików, a nie blokowało, że tylko dla 2 (to teraz)
+- naprawić skrypt tak, żeby odpalał się thread kamila zanim się skończy analiza
+- zrobić jeszcze tak, żeby było to dostępne dla 2 plików, a nie blokowało, że tylko dla 2

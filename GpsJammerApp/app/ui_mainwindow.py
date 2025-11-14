@@ -425,7 +425,9 @@ class MainWindow(QMainWindow):
     def open_settings(self): # Okno od ustawień w aplikacji
         try:
             from .settings_dialog import SettingsDialog
-            dialog = SettingsDialog(self)
+            # Pobierz liczbę wybranych plików (0 jeśli brak)
+            num_files = len(self.current_files) if hasattr(self, 'current_files') else 0
+            dialog = SettingsDialog(self, num_files=num_files)
 
             dialog.set_settings(self.current_settings)
             
