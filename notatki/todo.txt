@@ -12,6 +12,7 @@ W trakcie:
 - zmienienie mocy czystego pliku symulacyjnego (zmniejszyć moc)
 
 Gotowe:
+- połączenie nowych opcji od kuby
 - zrobić funkcjonalne ustawienia ( ten próg do ustawienia w wykrywaniu jammingu)
 - naprawić mape (tam małe poprawki :))
 - naprawić skrypt tak, żeby odpalał się thread kamila zanim się skończy analiza

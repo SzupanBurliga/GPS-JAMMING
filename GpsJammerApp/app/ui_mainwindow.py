@@ -57,6 +57,25 @@ class MainWindow(QMainWindow):
         self.selected_satellite_system = 'GPS'  # domyslny system
         self.jammer_shown = False
         
+        # Parametry dla różnych systemów satelitarnych
+        self.satellite_params = {
+            'GPS': {
+                'frequency': 1575.42,
+                'sample_rate': 2.048,
+                'band': 'GPS L1'
+            },
+            'GLONASS': {
+                'frequency': 1602.00,
+                'sample_rate': 10.00,
+                'band': 'GLONASS G1'
+            },
+            'Galileo': {
+                'frequency': 1575.42,
+                'sample_rate': 2.048,
+                'band': 'Galileo E1'
+            }
+        }
+        
         # domyslne ustawienia
         self.current_settings = {
             'antenna_positions': {
@@ -71,10 +90,24 @@ class MainWindow(QMainWindow):
             },
             'analysis_params': {
                 'frequency': 1575.42,
-                'threshold': 30,
+                'threshold': 120,
                 'sample_rate': 2.048
             }
         }
+        
+        # Ustaw początkowy komunikat dla domyślnego systemu GPS
+        self.update_satellite_system_display()
+        
+    def update_satellite_system_display(self):
+        """Aktualizuje wyświetlanie informacji o wybranym systemie satelitarnym."""
+        params = self.satellite_params[self.selected_satellite_system]
+        message = (
+            f"🛰️ Wybrano system satelitarny: {self.selected_satellite_system}\n"
+            f"   Ustawienia dla {params['band']}\n"
+            f"   Częstotliwość: {params['frequency']:.2f} MHz\n"
+            f"   Częstotliwość próbkowania: {params['sample_rate']:.3f} MHz"
+        )
+        self.results_text.setPlainText(message)
         
     def create_control_panel(self):
         control_panel = QWidget()
@@ -543,7 +576,15 @@ class MainWindow(QMainWindow):
             self.galileo_btn.setChecked(True)
             self.selected_satellite_system = 'Galileo'
         
+        # Aktualizuj parametry analizy w ustawieniach
+        params = self.satellite_params[self.selected_satellite_system]
+        self.current_settings['analysis_params']['frequency'] = params['frequency']
+        self.current_settings['analysis_params']['sample_rate'] = params['sample_rate']
+        
         print(f"Wybrany system satelitarny: {self.selected_satellite_system}")
+        
+        # Wyświetl szczegółowy komunikat w panelu wyników
+        self.update_satellite_system_display()
     
     def open_settings(self):
         try:
@@ -613,11 +654,12 @@ class MainWindow(QMainWindow):
         self.analyze_btn.setEnabled(False) 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n")
+        self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n🛰️ System satelitarny: {self.selected_satellite_system}\n")
         self.analysis_thread = GPSAnalysisThread(
             self.current_files, 
-            power_threshold=self.current_settings.get('power_threshold', 120.0),
-            antenna_positions=self.current_settings.get('antenna_positions')
+            power_threshold=self.current_settings['analysis_params'].get('threshold', 120.0),
+            antenna_positions=self.current_settings.get('antenna_positions'),
+            satellite_system=self.selected_satellite_system
         )
         self.analysis_thread.progress_update.connect(self.update_progress)
         self.analysis_thread.analysis_complete.connect(self.analysis_finished)

@@ -68,7 +68,7 @@ class GPSAnalysisThread(QThread):
     jamming_analysis_complete = Signal(object, object)
     triangulation_complete = Signal(dict)
 
-    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None):
+    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None, satellite_system='GPS'):
         super().__init__()
         self.file_paths = file_paths
         self.power_threshold = power_threshold
@@ -78,10 +78,22 @@ class GPSAnalysisThread(QThread):
             'antenna3': [0.0, 0.5]
         }
         
+        # Mapowanie flagi systemu !
+        self.satellite_system = satellite_system
+        if satellite_system == 'GPS':
+            self.gnss_system_flag = '-g'
+        elif satellite_system == 'GLONASS':
+            self.gnss_system_flag = '-n'
+        elif satellite_system == 'Galileo':
+            self.gnss_system_flag = '-l'
+        else:
+            self.gnss_system_flag = '-g'  # domyślnie GPS
+        
         print(f"[WORKER INIT] Utworzono GPSAnalysisThread z pozycjami anten:")
         print(f"[WORKER INIT]   Antena 1: {self.antenna_positions['antenna1']}")
         print(f"[WORKER INIT]   Antena 2: {self.antenna_positions['antenna2']}")
         print(f"[WORKER INIT]   Antena 3: {self.antenna_positions['antenna3']}")
+        print(f"[WORKER INIT]   System satelitarny: {self.satellite_system} (flaga: {self.gnss_system_flag})")
         self.current_buffcnt = 0
         self.current_lat = 0.0
         self.current_lon = 0.0
@@ -118,7 +130,7 @@ class GPSAnalysisThread(QThread):
         self.project_root_dir = os.path.dirname(app_dir)
         
         self.gnssdec_path = os.path.join(
-            self.project_root_dir, "backendhttp", "bin", "gnssdec"
+            self.project_root_dir, "backend", "bin", "gnssdec"
         )
         if self.file_paths:
             self.calculate_file_samples()
@@ -166,9 +178,7 @@ class GPSAnalysisThread(QThread):
                 
                 if self.current_lat != 0.0 and self.current_lon != 0.0:
                     if self.jamming_analysis_finished and self.jamming_start_sample is not None and not self.triangulation_started:
-                        # Analiza jammingu zakończona - sprawdź czy aktualna próbka jest przed jammingiem
                         if self.current_buffcnt < self.jamming_start_sample:
-                            # Sprawdź czy to jest nowsza pozycja niż już zapisana
                             if (not self.last_position_before_jamming['valid'] or 
                                 self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
                                 self.last_position_before_jamming = {
@@ -191,9 +201,7 @@ class GPSAnalysisThread(QThread):
                             'valid': True
                         }
                         
-                        # Sprawdź czy już mamy wykryty jamming (może się skończyć w międzyczasie)
                         if self.jamming_start_sample is not None:
-                            # Jamming już wykryty - sprawdź czy kandydat jest przed jammingiem i czy jest nowszy
                             if self.current_buffcnt < self.jamming_start_sample:
                                 if (not self.last_position_before_jamming['valid'] or 
                                     self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
@@ -201,9 +209,7 @@ class GPSAnalysisThread(QThread):
                                     print(f"[WORKER] 🔄 AKTUALIZACJA kandydata na ostatnią pozycję: próbka {self.current_buffcnt} < jamming {self.jamming_start_sample}")
                                     print(f"[WORKER]    📍 Kandydat: {self.current_lat:.8f}, {self.current_lon:.8f}")
                         else:
-                            # Jamming jeszcze nie wykryty - zapisz jako tymczasowy kandydat (zawsze najnowszy)
                             self.last_position_before_jamming = candidate_position
-                            # Nie loguj każdej pozycji - za dużo spamu
             
             elapsed = data.get('elapsed_time', 'N/A')
 
@@ -291,7 +297,6 @@ class GPSAnalysisThread(QThread):
             print(f"\n[JAMMING THREAD] Wykryto jamming: nr probek:  {start_sample} - {end_sample}")
             self.jamming_analysis_finished = True
             
-            # ZMIENIONE: Sprawdź i wyczyść pozycję jeśli nie jest przed jammingiem
             if self.last_position_before_jamming['valid']:
                 if self.last_position_before_jamming['buffcnt'] < start_sample:
                     print(f"[JAMMING THREAD] ✅ ZATWIERDZONA pozycja przed jammingiem: "
@@ -301,16 +306,14 @@ class GPSAnalysisThread(QThread):
                 else:
                     print(f"[JAMMING THREAD] ❌ ODRZUCONA pozycja - nie jest przed jammingiem!")
                     print(f"[JAMMING THREAD]    Pozycja: próbka {self.last_position_before_jamming['buffcnt']} >= jamming {start_sample}")
-                    # Wyczyść pozycję - nie jest przed jammingiem
                     self.last_position_before_jamming = {
                         'lat': 0.0, 'lon': 0.0, 'hgt': 0.0, 'buffcnt': 0, 'valid': False
                     }
                     print(f"[JAMMING THREAD]    Pozycja wyczyszczona - będzie aktualizowana przez nadchodzące dane gnssdec")
             else:
-                print(f"[JAMMING THREAD] ⏳ Brak zapisanej pozycji - będzie aktualizowana przez gnssdec")
+                print(f"[JAMMING THREAD] Brak zapisanej pozycji - będzie aktualizowana przez gnssdec")
             if len(self.file_paths) >= 2:
                 print(f"[JAMMING THREAD] Triangulacja będzie uruchomiona PO zakończeniu gnssdec z ostatnią pozycją")
-                # ZMIENIONE: NIE uruchamiamy triangulacji od razu - czekamy na koniec gnssdec
             else:
                 print(f"[JAMMING THREAD] Pominięto triangulację - za mało plików ({len(self.file_paths)})")
                 
@@ -632,7 +635,8 @@ class GPSAnalysisThread(QThread):
         
         try:
             print(f"[WORKER] Uruchamianie analizy {self.gnssdec_path}...")
-            gnssdec_command = [self.gnssdec_path, file1]
+            print(f"[WORKER] System satelitarny: {self.satellite_system} (flaga: {self.gnss_system_flag})")
+            gnssdec_command = [self.gnssdec_path, self.gnss_system_flag, file1]
             result = subprocess.run(gnssdec_command, check=True, capture_output=True, text=True)
             print(f"[WORKER] Analiza {self.gnssdec_path} zakończona.")
             

@@ -101,10 +101,12 @@ class SettingsDialog(QDialog):
         analysis_layout.setVerticalSpacing(15)
 
         analysis_layout.addWidget(QLabel("Częstotliwość:"), 0, 0)
-        analysis_layout.addWidget(QLabel("1575.42 MHz"), 0, 1)
+        self.frequency_label = QLabel("1575.42 MHz")
+        analysis_layout.addWidget(self.frequency_label, 0, 1)
 
         analysis_layout.addWidget(QLabel("Częstotliwość próbkowania:"), 1, 0)
-        analysis_layout.addWidget(QLabel("2.048 MHz"), 1, 1)
+        self.sample_rate_label = QLabel("2.048 MHz")
+        analysis_layout.addWidget(self.sample_rate_label, 1, 1)
 
         analysis_layout.addWidget(QLabel("Próg Detekcji (względny):"), 2, 0)
         self.threshold = QDoubleSpinBox()
@@ -318,6 +320,10 @@ class SettingsDialog(QDialog):
         distance_13 = calculate_distance(antenna_positions['antenna1'], antenna_positions['antenna3'])
         distance_23 = calculate_distance(antenna_positions['antenna2'], antenna_positions['antenna3'])
         
+        # Pobierz wartości z etykiet (usuwając " MHz")
+        frequency_text = self.frequency_label.text().replace(' MHz', '')
+        sample_rate_text = self.sample_rate_label.text().replace(' MHz', '')
+        
         return {
             'antenna_positions': antenna_positions,
             'antenna_distances': {
@@ -326,9 +332,9 @@ class SettingsDialog(QDialog):
                 '2_to_3': distance_23
             },
             'analysis_params': {
-                'frequency': 1575.42,
+                'frequency': float(frequency_text),
                 'threshold': int(self.threshold.value()),
-                'sample_rate': 2.048
+                'sample_rate': float(sample_rate_text)
             }
         }
     
@@ -347,3 +353,8 @@ class SettingsDialog(QDialog):
             params = settings['analysis_params']
             threshold_value = params.get('threshold', 30)
             self.threshold.setValue(float(threshold_value))
+            
+            frequency = params.get('frequency', 1575.42)
+            sample_rate = params.get('sample_rate', 2.048)
+            self.frequency_label.setText(f"{frequency:.2f} MHz")
+            self.sample_rate_label.setText(f"{sample_rate:.3f} MHz")
