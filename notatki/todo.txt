@@ -1,5 +1,5 @@
 do zrobienia: (ASAP)
-- zmienienie mocy czystego pliku symulacyjnego (zmniejszyć moc)
+
 to na końcu
 - usunąć te wszystkie useless komentarze i notatki, jednym słowem posprzątać
 
@@ -9,9 +9,10 @@ Plan 200%
 
 
 W trakcie:
-- zrobić funkcjonalne ustawienia ( ten próg do ustawienia w wykrywaniu jammingu) 50%
+- zmienienie mocy czystego pliku symulacyjnego (zmniejszyć moc)
 
 Gotowe:
+- zrobić funkcjonalne ustawienia ( ten próg do ustawienia w wykrywaniu jammingu)
 - naprawić mape (tam małe poprawki :))
 - naprawić skrypt tak, żeby odpalał się thread kamila zanim się skończy analiza
 - zrobić jeszcze tak, żeby było to dostępne dla 2 plików, a nie blokowało, że tylko dla 2
