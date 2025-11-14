@@ -25,6 +25,20 @@
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       border-radius: 5px;
     }}
+
+    /* Szersza legenda, żeby tekst się nie zawijał zbyt wcześnie */
+    .info.legend {{
+      min-width: 220px;    /* ustaw minimalną szerokość legendy */
+      max-width: 360px;    /* ogranicz maksymalną szerokość */
+      white-space: normal; /* pozwól na naturalne łamanie linii, ale rzadziej */
+      word-break: normal;
+    }}
+    .legend-item{{
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }}
+
     .legend {{
       line-height: 18px;
       color: #555;
@@ -32,9 +46,14 @@
     .legend i {{
       width: 18px;
       height: 18px;
-      float: left;
-      margin-right: 8px;
-      opacity: 0.7;
+      flex-shrink: 0;
+      margin-right: 12px; /* nieco więcej odstępu między ikoną a tekstem */
+      opacity: 0.9;
+    }}
+
+    @media (max-width: 480px) {{
+      .info.legend {{ min-width: 160px; max-width: 260px; font-size: 13px; }}
+      .legend i {{ margin-right: 8px; }}
     }}
   </style>
 </head>
@@ -79,27 +98,6 @@
     
     let liveMarker = null;
     let livePolyline = null;
-
-    // Funkcja do dodawania punktów zakłóceń
-    function addJammingPoint(lat, lng, strength, frequency) {{
-      const color = strength > 80 ? 'red' : strength > 50 ? 'orange' : 'yellow';
-      const marker = L.circleMarker([lat, lng], {{
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.6,
-        radius: Math.max(5, strength / 10)
-      }}).addTo(map);
-
-      marker.bindPopup(`
-        <b>Zakłócenie GPS</b><br>
-        Siła: ${{strength}}%<br>
-        Częstotliwość: ${{frequency}} MHz<br>
-        Współrzędne: ${{lat.toFixed(6)}}, ${{lng.toFixed(6)}}
-      `);
-      
-      signalMarkers.push(marker);
-      return marker;
-    }}
 
     function clearSignalMarkers() {{
       signalMarkers.forEach(marker => map.removeLayer(marker));
@@ -153,7 +151,6 @@
           
       }} else {{
         liveMarker.setLatLng(newPos);
-        // Aktualizuj popup z nowymi współrzędnymi
         liveMarker.setPopupContent(`
             <b>Aktualna lokalizacja:</b><br>
             Szerokość geograficzna: ${{lat.toFixed(7)}}<br>
@@ -179,10 +176,10 @@
     legend.onAdd = function (map) {{
       const div = L.DomUtil.create('div', 'info legend');
       div.innerHTML = `
-        <h4>Siła zakłóceń GPS</h4>
-        <i style="background:red"></i> Wysokie (80-100%)<br>
-        <i style="background:orange"></i> Średnie (50-80%)<br>
-        <i style="background:yellow"></i> Niskie (0-50%)<br>
+      <h4>Legenda</h4>
+      <div class="legend-item"><i style="background:red; border-radius: 50%;"></i> Lokalizacja jammera</div>
+      <div class="legend-item"><i style="background:red; opacity: 0.3; border: 2px solid red;"></i> Szacowana odległość</div>
+      <div class="legend-item"><i style="background:#3388ff; border-radius: 50%;"></i> Zdekodowana pozycja</div>
       `;
       return div;
     }};

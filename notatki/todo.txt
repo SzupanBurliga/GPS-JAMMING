@@ -1,4 +1,12 @@
-do zrobienia:
-- dodać do symulacji więcej opcji Glonass, galileo (do zrobienia na 13.11)
-- dodać 3 buttony do wyboru (gps,glonass,galileo) (gotowe - logike dogadać z kubą)
-- poprawić algorytm do wykrywania jamming
+do zrobienia: (ASAP)
+- naprawić skrypt tak, żeby odpalał się thread kamila zanim się skończy analiza (logike poprawić)
+
+- naprawić mape (tam małe poprawki :))
+- zrobić funkcjonalne ustawienia (tak, żeby działało - usunąć częstotliwość, próbkowanie, ten próg do ustawienia w wykrywaniu jammingu)
+- zrobić jeszcze tak, żeby było to dostępne dla 2 plików, a nie blokowało, że tylko dla 2
+- to na końcu
+- usunąć te wszystkie useless komentarze i notatki
+
+Plan 200%
+- dodać generowanie sygnałów Galileo, Glonass w symulacjach
+- poprawić algorytm do wykrywania jammingu

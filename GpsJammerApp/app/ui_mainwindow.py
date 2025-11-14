@@ -511,7 +511,8 @@ class MainWindow(QMainWindow):
         self.results_text.setPlainText(updated_text)
         scrollbar = self.results_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
-
+ 
+ # Ustawienia progress baru
     def update_progress(self, value, state="normal"):
         self.progress_bar.setValue(value)
 
@@ -544,7 +545,7 @@ class MainWindow(QMainWindow):
             if ref_pos:
                 ref_lat = ref_pos['lat']
                 ref_lon = ref_pos['lon']
-                print(f"[UI] Używam pozycji referencyjnej: {ref_lat:.6f}, {ref_lon:.6f} (próbka {ref_pos['buffcnt']})")
+                print(f"[UI] Używam pozycji referencyjnej: {ref_lat:.6f}, {ref_lon:.6f}")
             else:
                 ref_lat = geo['lat']
                 ref_lon = geo['lon']
@@ -553,12 +554,12 @@ class MainWindow(QMainWindow):
             js_add_jammer = f"""
             var jammerMarker = L.marker([{geo['lat']}, {geo['lon']}], {{
                 icon: L.icon({{
-                    iconUrl: 'data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="red" stroke="darkred" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="10" font-weight="bold">JAM</text></svg>',
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
+                    iconUrl: 'data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="red" stroke="darkred" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="10" font-weight="bold">JAM</text></svg>', 
+                    iconSize: [20, 20],
+                    iconAnchor: [8, 8]
                 }})
             }}).addTo(map);
-            jammerMarker.bindPopup('POZYCJA JAMMERA<br/>Lat: {geo['lat']:.8f}N<br/>Lon: {geo['lon']:.8f}E<br/>Wykryty triangulacja<br/>Odleglosci: {", ".join([f"{d:.1f}m" for d in distances])}');
+            jammerMarker.bindPopup('POZYCJA JAMMERA<br/>Lat: {geo['lat']:.8f}N<br/>Lon: {geo['lon']:.8f}E<br/>Wykryty triangulacja');
             
             // Wyśrodkuj mapę na pozycji jammera
             map.setView([{geo['lat']}, {geo['lon']}], 18);
@@ -574,7 +575,6 @@ class MainWindow(QMainWindow):
 
                 for i, (ant_pos, distance) in enumerate(zip(antenna_positions, distances)):
                     if ant_pos is not None and distance is not None:
-                        # 
                         lat_offset = ant_pos[1] / 111320.0  
                         lon_offset = ant_pos[0] / (111320.0 * abs(ref_lat / 90.0)) 
                         antenna_lat = ref_lat + lat_offset
@@ -584,10 +584,10 @@ class MainWindow(QMainWindow):
                         var circle{i} = L.circle([{antenna_lat}, {antenna_lon}], {{
                             color: 'red',
                             fillColor: 'rgba(255, 0, 0, 0.1)',
-                            fillOpacity: 0.2,
+                            fillOpacity: 0.4,
                             radius: {distance}
                         }}).addTo(map);
-                        circle{i}.bindPopup('Antena {i+1}<br/>Odleglosc do jammera: {distance:.1f}m');
+                        circle{i}.bindPopup('Antena {i+1}<br/>Szacowana odległość {distance:.1f}m');
                         """
                         self.web_view.page().runJavaScript(js_add_circle)
 
@@ -637,39 +637,6 @@ class MainWindow(QMainWindow):
                     self.display_final_triangulation_result(triangulation)
                 return
         
-        # kod dla normalnych punktów zakłóceń - na przyszłość
-        if not points:
-            return
-
-        for point in points:
-            js_code = f"""
-            addJammingPoint({point['lat']}, {point['lng']}, {point['strength']}, {point['frequency']});
-            """
-            self.web_view.page().runJavaScript(js_code)
-            
-        high_strength = [p for p in points if p['strength'] > 80]
-        medium_strength = [p for p in points if 50 <= p['strength'] <= 80]
-        low_strength = [p for p in points if p['strength'] < 50]
-        
-
-        # tu zostawione, może się przyda kiedyś XD
-        summary = f"""ANALIZA ZAKOŃCZONA:
-Przeanalizowano plików: {len(self.current_files)}
-Znaleziono {len(points)} punktów zakłóceń GPS
-
-Wysokie zakłócenia (>80%): {len(high_strength)} punktów
-Średnie zakłócenia (50-80%): {len(medium_strength)} punktów  
-Niskie zakłócenia (<50%): {len(low_strength)} punktów
-
-Najsilniejsze zakłócenie: {max(points, key=lambda x: x['strength'])['strength']}%
-Średnia siła zakłóceń: {sum(p['strength'] for p in points) / len(points):.1f}%
-
-Parametry analizy:
-- Częstotliwość: {self.freq_spin.value()} MHz
-- Próg wykrywania: {self.threshold_spin.value()}%
-"""
-        self.results_text.setPlainText(summary)
-        
     def display_final_triangulation_result(self, triangulation):
         if triangulation and triangulation['success']:
             geo = triangulation['location_geographic']
@@ -693,7 +660,6 @@ Parametry analizy:
         js_clear_all = """
         map.eachLayer(function(layer) {
             if (layer instanceof L.Marker || layer instanceof L.Circle) {
-                // Zachowaj tylko podstawową warstwę mapy
                 if (layer.options && !layer.options.attribution) {
                     map.removeLayer(layer);
                 }
@@ -701,7 +667,6 @@ Parametry analizy:
         });
         """
         self.web_view.page().runJavaScript(js_clear_all)
-        
         self.is_map_centered = False
   
     def run_simulation_script(self):
