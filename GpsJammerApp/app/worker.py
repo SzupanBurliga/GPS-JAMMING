@@ -4,6 +4,8 @@ import subprocess
 import sys
 import json
 import threading
+import time
+import numpy as np
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import datetime
 from .checkIfJamming import analyze_file_for_jamming 
@@ -448,10 +450,11 @@ class GPSAnalysisThread(QThread):
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji przed jammingiem!")
                 
                 # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
+                # WAŻNE: Konwertuj listy na numpy arrays - algorytm wymaga arrays!
                 antenna_positions_meters = [
-                    self.antenna_positions['antenna1'],  # [0.0, 0.0] - zawsze punkt odniesienia
-                    self.antenna_positions['antenna2'],  # np. [0.5, 0.0]
-                    self.antenna_positions['antenna3']   # np. [0.0, 0.5]
+                    np.array(self.antenna_positions['antenna1']),  # [0.0, 0.0] - zawsze punkt odniesienia
+                    np.array(self.antenna_positions['antenna2']),  # np. [0.5, 0.0]
+                    np.array(self.antenna_positions['antenna3'])   # np. [0.0, 0.5]
                 ]
                 
                 print(f"[TRIANGULATION THREAD] Pozycje anten przekazane do algorytmu:")
@@ -544,10 +547,11 @@ class GPSAnalysisThread(QThread):
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji!")
 
                 # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
+                # WAŻNE: Konwertuj listy na numpy arrays - algorytm wymaga arrays!
                 antenna_positions_meters = [
-                    self.antenna_positions['antenna1'],  # [0.0, 0.0] - zawsze punkt odniesienia
-                    self.antenna_positions['antenna2'],  # np. [0.5, 0.0]
-                    self.antenna_positions['antenna3']   # np. [0.0, 0.5]
+                    np.array(self.antenna_positions['antenna1']),  # [0.0, 0.0] - zawsze punkt odniesienia
+                    np.array(self.antenna_positions['antenna2']),  # np. [0.5, 0.0]
+                    np.array(self.antenna_positions['antenna3'])   # np. [0.0, 0.5]
                 ]
                 
                 print(f"[TRIANGULATION THREAD] Pozycje anten przekazane do algorytmu:")
