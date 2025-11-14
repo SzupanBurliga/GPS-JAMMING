@@ -20,8 +20,6 @@
 #include <tmmintrin.h>
 #endif
 
-#define DEBUG_GAL_E1B
-
 #include "rtklib.h"
 #include <fec.h>
 #include <fftw3.h>

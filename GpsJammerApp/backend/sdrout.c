@@ -138,6 +138,48 @@ extern void updateNavStatusWin(int counter) {
         gps_week = 0;
     }
 
+    static int hold_valid = 0;
+    static double hold_lat = 0.0, hold_lon = 0.0, hold_hgt = 0.0;
+    static double hold_time = 0.0;
+    const int MIN_VALID_NSAT = 4;
+    const double MAX_JUMP_SPEED = 500.0; /* m/s */
+    double current_time = sdrstat.elapsedTime;
+    int fix_valid = (nsat >= MIN_VALID_NSAT);
+
+    if (fix_valid && hold_valid) {
+        double dt = current_time - hold_time;
+        if (dt > 0.0) {
+            double lat1 = hold_lat * PI / 180.0;
+            double lat2 = lat * PI / 180.0;
+            double dlat = lat2 - lat1;
+            double dlon = (lon - hold_lon) * PI / 180.0;
+            double sin_dlat = sin(dlat / 2.0);
+            double sin_dlon = sin(dlon / 2.0);
+            double a = sin_dlat * sin_dlat +
+                       cos(lat1) * cos(lat2) * sin_dlon * sin_dlon;
+            double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+            double distance = 6371000.0 * c;
+            double speed = distance / dt;
+            if (speed > MAX_JUMP_SPEED) {
+                fix_valid = 0;
+            }
+        }
+    }
+
+    int hold_applied = 0;
+    if (!fix_valid && hold_valid) {
+        lat = hold_lat;
+        lon = hold_lon;
+        hgt = hold_hgt;
+        hold_applied = 1;
+    } else if (fix_valid) {
+        hold_lat = lat;
+        hold_lon = lon;
+        hold_hgt = hgt;
+        hold_time = current_time;
+        hold_valid = 1;
+    }
+
     #define JSON_APPEND(fmt, ...)                                                          \
     do {                                                                                  \
         int _n = snprintf(json_buffer + json_pos,                                          \
@@ -230,9 +272,10 @@ extern void updateNavStatusWin(int counter) {
             (unsigned long long)sdrstat.buffcnt * FILE_BUFFSIZE);
 
     JSON_APPEND("\"position\":{\"nsat\":%d,\"lat\":%.7f,\"lon\":%.7f,\"hgt\":%"
-                 ".1f,\"gdop\":%.2f,\"clk_bias\":%.5e,\"buffcnt\":%llu},",
+                 ".1f,\"gdop\":%.2f,\"clk_bias\":%.5e,\"buffcnt\":%llu,\"hold\":%s},",
                  nsat, lat, lon, hgt, gdop, clkBias / CTIME,
-                 (unsigned long long)sdrstat.buffcnt * FILE_BUFFSIZE);
+                 (unsigned long long)sdrstat.buffcnt * FILE_BUFFSIZE,
+                 hold_applied ? "true" : "false");
 
     printf("LLA|%02d|%s\n", nsat, bufferNav);
 

@@ -33,10 +33,6 @@ extern void sdrnavigation(sdrch_t *sdr, uint64_t buffloc, uint64_t cnt) {
             if (sdr->nav.flagsyncf && !sdr->nav.flagtow) {
                 sdr->nav.firstsf = buffloc;
                 sdr->nav.firstsfcnt = cnt;
-                if (sdr->nav.ctype == CTYPE_E1B) {
-                    SDRPRINTF("DEBUG E1B %s: *** PREAMBLE FOUND! cnt=%d polarity=%d ***\n",
-                        sdr->satstr, (int)cnt, sdr->nav.polarity);
-                }
                 sdr->nav.flagtow = ON;
             }
         }
@@ -47,30 +43,17 @@ extern void sdrnavigation(sdrch_t *sdr, uint64_t buffloc, uint64_t cnt) {
                 predecodefec(&sdr->nav);
                 sfn = decodenav(&sdr->nav);
                 
-                if (sdr->nav.ctype == CTYPE_E1B) {
-                    SDRPRINTF("DEBUG E1B %s: Word ID=%d, tow=%.1f, week=%d, cnt=%d, eph_cnt=%d\n",
-                        sdr->satstr, sfn, sdr->nav.sdreph.tow_gpst,
-                        sdr->nav.sdreph.week_gpst, (int)cnt, sdr->nav.sdreph.cnt);
-                }
-                
                 if (!sfn) {
                     ;
                 }
 
                 if (sdr->nav.sdreph.tow_gpst == 0 && sdr->nav.ctype != CTYPE_G1) {
                     /* reset if tow does not decoded (skip for GLONASS - needs 5 strings) */
-                    if (sdr->nav.ctype == CTYPE_E1B) {
-                        SDRPRINTF("DEBUG E1B %s: WARNING - tow_gpst is 0, resetting sync\n", sdr->satstr);
-                    }
                     sdr->nav.flagsyncf = OFF;
                     sdr->nav.flagtow = OFF;
                 } else if (cnt - sdr->nav.firstsfcnt == 0 || 
                           (sdr->nav.ctype == CTYPE_G1 && sdr->nav.sdreph.eph.week != 0 && !sdr->nav.flagdec)) {
                     /* Set flagdec: for GPS/Galileo on first frame, for GLONASS when ephemeris complete */
-                    if (sdr->nav.ctype == CTYPE_E1B) {
-                        SDRPRINTF("DEBUG E1B %s: Setting flagdec=ON! tow=%.1f week=%d\n",
-                            sdr->satstr, sdr->nav.sdreph.tow_gpst, sdr->nav.sdreph.week_gpst);
-                    }
                     sdr->nav.flagdec = ON;
                     sdr->nav.sdreph.eph.sat = sdr->sat;
                     sdr->nav.firstsftow = sdr->nav.sdreph.tow_gpst;

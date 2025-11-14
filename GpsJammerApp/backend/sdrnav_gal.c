@@ -5,12 +5,6 @@
 *-----------------------------------------------------------------------------*/
 #include "sdr.h"
 
-#ifdef DEBUG_GAL_E1B
-#define E1B_DEBUG(...) SDRPRINTF(__VA_ARGS__)
-#else
-#define E1B_DEBUG(...) do { (void)0; } while (0)
-#endif
-
 #define P2_34       5.820766091346741E-11 /* 2^-34 */
 #define P2_46       1.421085471520200E-14 /* 2^-46 */
 #define P2_59       1.734723475976807E-18 /* 2^-59 */
@@ -224,8 +218,6 @@ extern int checkcrc_e1b(uint8_t *data1, uint8_t *data2)
     crc=crc24q(crcbins,25); /* compute crc24 */
     crcmsg=getbitu(data2,82,24); /* crc in message */
 
-    E1B_DEBUG("DEBUG E1B checkcrc_e1b: crc=%d\n", crc);
-    E1B_DEBUG("DEBUG E1B checkcrc_e1b: crcmsg=%d\n", crcmsg);
     /* crc matching */
     if (crc==crcmsg) {
         return 0;
@@ -249,50 +241,34 @@ extern int decode_page_e1b(const uint8_t *buff1, const uint8_t *buff2,
     uint8_t buff[30];
     memcpy(buff,buff1,15); memcpy(&buff[15],buff2,15);
     
-    /* DEBUG: Show combined buffer */
-    E1B_DEBUG("DEBUG E1B decode_page_e1b: Combined buffer (first 10 bytes): ");
     int i;
-    for (i=0;i<10;i++) E1B_DEBUG("%02x ", buff[i]);
-    E1B_DEBUG("\n");
     
     id=getbitu(buff,2,6); /* word type */
-    E1B_DEBUG("DEBUG E1B decode_page_e1b: Word type = %d (bits 2-7)\n", id);
-    
     switch (id) {
     case 0: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 0 (Time of Week)\n");
         decode_word0(buff,eph); 
         break;
     case 1: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 1 (Ephemeris 1)\n");
         decode_word1(buff,eph); 
         break;
     case 2: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 2 (Ephemeris 2)\n");
         decode_word2(buff,eph); 
         break;
     case 3: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 3 (Ephemeris 3)\n");
         decode_word3(buff,eph); 
         break;
     case 4: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 4 (Clock)\n");
         decode_word4(buff,eph); 
         break;
     case 5: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 5 (Time & Health)\n");
         decode_word5(buff,eph); 
         break;
     case 6: 
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: Decoding word 6 (Time)\n");
         decode_word6(buff,eph); 
         break;
     default:
-        E1B_DEBUG("DEBUG E1B decode_page_e1b: WARNING - Unknown word type %d\n", id);
         break;
     }
-    E1B_DEBUG("DEBUG E1B decode_page_e1b: After decode - eph_cnt=%d, iodc=%d\n", 
-              eph->cnt, eph->eph.iodc);
     return id;
 }
 /* decode Galileo navigation data ----------------------------------------------
@@ -347,22 +323,17 @@ extern int decode_e1b(sdrnav_t *nav)
     /* check page part (even/odd) */
     if (getbitu(dec_e1b1,0,1)) { /* if first page part is odd */
         /* reset page synchronization */
-        E1B_DEBUG("DEBUG E1B decode_e1b: ERROR - first page part is odd (expected even)\n");
         nav->flagsyncf=OFF;
         nav->flagtow=OFF;
         return -1;
     }
     
     if (checkcrc_e1b(dec_e1b1,dec_e1b2)<0) {
-        E1B_DEBUG("DEBUG E1B decode_e1b: ERROR - CRC mismatch\n");
         return -1;
-    } else {
-        E1B_DEBUG("DEBUG E1B decode_e1b: CRC OK, decoding page\n");
     }
     
     /* decode navigation data */
     id=decode_page_e1b(dec_e1b1,dec_e1b2,&nav->sdreph);
-    if (id<0||id>10) E1B_DEBUG("DEBUG E1B decode_e1b: ERROR - invalid word number %d\n",id);
     return id;
 }
 

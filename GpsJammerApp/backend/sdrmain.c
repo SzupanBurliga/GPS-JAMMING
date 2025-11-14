@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
     int num_cpus;
     cpu_set_t cpu_set;
     num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
-    for (int n=0;n<(num_cpus-4);n++) {
+    for (int n=0;n<(num_cpus-2);n++) {
       CPU_SET(n, &cpu_set);
     }
     if (sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpu_set) == -1) {
