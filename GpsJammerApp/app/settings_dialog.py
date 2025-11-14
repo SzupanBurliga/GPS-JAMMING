@@ -345,5 +345,5 @@ class SettingsDialog(QDialog):
         
         if 'analysis_params' in settings:
             params = settings['analysis_params']
-            threshold_value = params.get('threshold', 30)
+            threshold_value = params.get('threshold', 120)
             self.threshold.setValue(float(threshold_value))

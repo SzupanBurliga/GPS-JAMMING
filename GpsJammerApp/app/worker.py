@@ -66,10 +66,20 @@ class GPSAnalysisThread(QThread):
     jamming_analysis_complete = Signal(object, object)
     triangulation_complete = Signal(dict)
 
-    def __init__(self, file_paths, power_threshold=120.0):
+    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None):
         super().__init__()
         self.file_paths = file_paths
         self.power_threshold = power_threshold
+        self.antenna_positions = antenna_positions if antenna_positions else {
+            'antenna1': [0.0, 0.0],
+            'antenna2': [0.5, 0.0],
+            'antenna3': [0.0, 0.5]
+        }
+        
+        print(f"[WORKER INIT] Utworzono GPSAnalysisThread z pozycjami anten:")
+        print(f"[WORKER INIT]   Antena 1: {self.antenna_positions['antenna1']}")
+        print(f"[WORKER INIT]   Antena 2: {self.antenna_positions['antenna2']}")
+        print(f"[WORKER INIT]   Antena 3: {self.antenna_positions['antenna3']}")
         self.current_buffcnt = 0
         self.current_lat = 0.0
         self.current_lon = 0.0
@@ -416,7 +426,7 @@ class GPSAnalysisThread(QThread):
                 # nadpisywać kandydata na ostatnią pozycję przed jammigem.
                 self.triangulation_started = True
                 final_position = self.last_position_before_jamming.copy()
-                print(f"[TRIANGULATION THREAD] 🔒 ZABLOKOWANIE pozycji referencyjnej: {final_position['lat']:.8f}, {final_position['lon']:.8f} (próbka {final_position['buffcnt']})")
+                print(f"[TRIANGULATION THREAD] ZABLOKOWANIE pozycji referencyjnej: {final_position['lat']:.8f}, {final_position['lon']:.8f} (próbka {final_position['buffcnt']})")
 
                 print(f"[TRIANGULATION THREAD] Rozpoczynanie triangulacji z {len(self.file_paths)} plikami...")
                 
@@ -426,18 +436,33 @@ class GPSAnalysisThread(QThread):
                 if final_position['valid']:
                     ref_lat = final_position['lat']
                     ref_lon = final_position['lon']
-                    print(f"[TRIANGULATION THREAD] 🎯 FINALNA POZYCJA REFERENCYJNA:")
-                    print(f"[TRIANGULATION THREAD]    Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
-                    print(f"[TRIANGULATION THREAD]    Próbka: {final_position['buffcnt']} (ostatnia przed jamming {self.jamming_start_sample})")
-                    print(f"[TRIANGULATION THREAD]    Różnica: {self.jamming_start_sample - final_position['buffcnt']} próbek przed jammingiem")
+                    # do debugowania
+                    #print(f"[TRIANGULATION THREAD] FINALNA POZYCJA REFERENCYJNA:")
+                    #print(f"[TRIANGULATION THREAD] Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
+                    #print(f"[TRIANGULATION THREAD] Próbka: {final_position['buffcnt']} (ostatnia przed jamming {self.jamming_start_sample})")
+                    #print(f"[TRIANGULATION THREAD] Różnica: {self.jamming_start_sample - final_position['buffcnt']} próbek przed jammingiem")
                 else:
                     ref_lat = self.current_lat if self.current_lat != 0.0 else 50.06143
                     ref_lon = self.current_lon if self.current_lon != 0.0 else 19.93658
                     print(f"[TRIANGULATION THREAD] Punkt referencyjny (fallback): {ref_lat:.6f}, {ref_lon:.6f}")
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji przed jammingiem!")
                 
+                # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
+                antenna_positions_meters = [
+                    self.antenna_positions['antenna1'],  # [0.0, 0.0] - zawsze punkt odniesienia
+                    self.antenna_positions['antenna2'],  # np. [0.5, 0.0]
+                    self.antenna_positions['antenna3']   # np. [0.0, 0.5]
+                ]
+                
+                print(f"[TRIANGULATION THREAD] Pozycje anten przekazane do algorytmu:")
+                print(f"[TRIANGULATION THREAD]   Antena 1: x={antenna_positions_meters[0][0]:.3f}m, y={antenna_positions_meters[0][1]:.3f}m")
+                print(f"[TRIANGULATION THREAD]   Antena 2: x={antenna_positions_meters[1][0]:.3f}m, y={antenna_positions_meters[1][1]:.3f}m")
+                if len(test_files) >= 3:
+                    print(f"[TRIANGULATION THREAD]   Antena 3: x={antenna_positions_meters[2][0]:.3f}m, y={antenna_positions_meters[2][1]:.3f}m")
+                
                 result = triangulate_jammer_location(
                     file_paths=test_files,
+                    antenna_positions_meters=antenna_positions_meters,
                     reference_lat=ref_lat,
                     reference_lon=ref_lon,
                     tx_power=40.0,
@@ -509,17 +534,31 @@ class GPSAnalysisThread(QThread):
                     }
                     ref_lat = final_position['lat']
                     ref_lon = final_position['lon']
-                    print(f"[TRIANGULATION THREAD] 🎯 FINALNA POZYCJA REFERENCYJNA (ostatnia z gnssdec):")
-                    print(f"[TRIANGULATION THREAD]    Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
-                    print(f"[TRIANGULATION THREAD]    Próbka: {final_position['buffcnt']} (ostatnia z gnssdec)")
+                    #print(f"[TRIANGULATION THREAD] FINALNA POZYCJA REFERENCYJNA:")
+                    print(f"[TRIANGULATION THREAD] Współrzędne: {ref_lat:.8f}, {ref_lon:.8f}")
+                    #print(f"[TRIANGULATION THREAD] Próbka: {final_position['buffcnt']}")
                 else:
                     ref_lat = 50.06143
                     ref_lon = 19.93658
                     print(f"[TRIANGULATION THREAD] Punkt referencyjny (fallback): {ref_lat:.6f}, {ref_lon:.6f}")
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji!")
 
+                # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
+                antenna_positions_meters = [
+                    self.antenna_positions['antenna1'],  # [0.0, 0.0] - zawsze punkt odniesienia
+                    self.antenna_positions['antenna2'],  # np. [0.5, 0.0]
+                    self.antenna_positions['antenna3']   # np. [0.0, 0.5]
+                ]
+                
+                print(f"[TRIANGULATION THREAD] Pozycje anten przekazane do algorytmu:")
+                print(f"[TRIANGULATION THREAD]   Antena 1: x={antenna_positions_meters[0][0]:.3f}m, y={antenna_positions_meters[0][1]:.3f}m")
+                print(f"[TRIANGULATION THREAD]   Antena 2: x={antenna_positions_meters[1][0]:.3f}m, y={antenna_positions_meters[1][1]:.3f}m")
+                if len(test_files) >= 3:
+                    print(f"[TRIANGULATION THREAD]   Antena 3: x={antenna_positions_meters[2][0]:.3f}m, y={antenna_positions_meters[2][1]:.3f}m")
+                
                 result = triangulate_jammer_location(
                     file_paths=test_files,
+                    antenna_positions_meters=antenna_positions_meters,
                     reference_lat=ref_lat,
                     reference_lon=ref_lon,
                     tx_power=40.0,
@@ -584,11 +623,6 @@ class GPSAnalysisThread(QThread):
             self.analysis_complete.emit([])
             return
         self.analyze_jamming_in_background(file1)
-        # Jeśli mamy przynajmniej 2 pliki, uruchamiamy wątek triangulacji
-        # w trybie "czekaj/polluj" — wątek sam odczeka na ostatnią pozycję
-        # sprzed jammigu przesyłaną przez gnssdec i dopiero wtedy zacznie
-        # wykonywać triangulację. Dzięki temu triangulacja działa równolegle
-        # i nie czekamy blokująco na zakończenie procesu gnssdec.
         if len(self.file_paths) >= 2:
             self.analyze_triangulation_when_ready()
         

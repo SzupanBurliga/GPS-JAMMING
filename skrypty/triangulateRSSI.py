@@ -114,7 +114,6 @@ def find_best_estimate_no_intersection(p0, r0, p1, r1):
     return best_estimate
 
 #   FUNKCJA OBLICZENIOWA DLA 3 ANTEN  
-
 #Obliczanie lokalizacji dla trzech okręgów
 def trilaterate(p0, r0, p1, r1, p2, r2):
     x0, y0 = p0; x1, y1 = p1; x2, y2 = p2
@@ -206,13 +205,10 @@ def triangulate_jammer_location(file_paths,
         )
         
         if intersections:
-            # POPRAWIONE: Zwróć informację o obu możliwych lokalizacjach
             loc1, loc2 = intersections
             dist1 = np.linalg.norm(loc1)
             dist2 = np.linalg.norm(loc2)
-            
-            # Dla kompatybilności wstecznej wybieramy jeden punkt (można zmienić logikę)
-            # UWAGA: To może być nieprawidłowy punkt! Użytkownik powinien sprawdzić oba.
+
             location = loc1 if dist1 <= dist2 else loc2
             
             message = f'Bilateracja dla 2 anten - 2 możliwe lokalizacje: ' + \
@@ -315,13 +311,12 @@ if __name__ == "__main__":
     
     if result_3ant['success']:
         loc_geo = result_3ant['location_geographic']
-        print("✅ SUKCES!")
         print(f"📍 Lokalizacja jammera:")
         print(f"   Współrzędne geograficzne: {loc_geo['lat']:.8f}°N, {loc_geo['lon']:.8f}°E")
         print(f"   Przesunięcie: {loc_geo['lat_offset_degrees']:.6f}° ({loc_geo['lat_offset_minutes']:.2f}') lat")
         print(f"                 {loc_geo['lon_offset_degrees']:.6f}° ({loc_geo['lon_offset_minutes']:.2f}') lon")
         print(f"   W metrach: x={result_3ant['location_meters'][0]:.2f}m, y={result_3ant['location_meters'][1]:.2f}m")
-        print(f"📏 Odległości: {result_3ant['distances']}")
+        print(f"Odległości: {result_3ant['distances']}")
     else:
         print("❌ BŁĄD:", result_3ant['message'])
     

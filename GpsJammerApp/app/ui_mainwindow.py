@@ -614,7 +614,11 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n")
-        self.analysis_thread = GPSAnalysisThread(self.current_files)
+        self.analysis_thread = GPSAnalysisThread(
+            self.current_files, 
+            power_threshold=self.current_settings.get('power_threshold', 120.0),
+            antenna_positions=self.current_settings.get('antenna_positions')
+        )
         self.analysis_thread.progress_update.connect(self.update_progress)
         self.analysis_thread.analysis_complete.connect(self.analysis_finished)
         self.analysis_thread.new_position_data.connect(self.update_map_position)
@@ -699,11 +703,12 @@ class MainWindow(QMainWindow):
             """
             self.web_view.page().runJavaScript(js_add_jammer)
             if hasattr(self, 'current_files') and len(self.current_files) >= 2:
-                # Pozycje anten względem punktu referencyjnego (w metrach)
+                # Pozycje anten względem punktu referencyjnego (w metrach) - pobierz z ustawień
+                settings_positions = self.current_settings.get('antenna_positions', {})
                 antenna_positions = [
-                    [0.0, 0.0],      # antena 0 - punkt odniesienia dla innych anten (to jest na zawsze to samo)
-                    [0.5, 0.0],      # TODO !!!! dodać tu modyfikacje tego z ustawień :)
-                    [0.0, 0.5] if len(self.current_files) == 3 else None 
+                    settings_positions.get('antenna1', [0.0, 0.0]),
+                    settings_positions.get('antenna2', [0.5, 0.0]),
+                    settings_positions.get('antenna3', [0.0, 0.5]) if len(self.current_files) == 3 else None
                 ]
 
                 for i, (ant_pos, distance) in enumerate(zip(antenna_positions, distances)):
