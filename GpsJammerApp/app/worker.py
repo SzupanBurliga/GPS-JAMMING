@@ -4,6 +4,8 @@ import subprocess
 import sys
 import json
 import threading
+import time
+import numpy as np
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import datetime
 from .checkIfJamming import analyze_file_for_jamming 
@@ -66,7 +68,7 @@ class GPSAnalysisThread(QThread):
     jamming_analysis_complete = Signal(list)  # Teraz emituje listę zdarzeń [(start, end), ...]
     triangulation_complete = Signal(dict)
 
-    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None):
+    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None, satellite_system='GPS'):
         super().__init__()
         self.file_paths = file_paths
         self.power_threshold = power_threshold
@@ -76,10 +78,22 @@ class GPSAnalysisThread(QThread):
             'antenna3': [0.0, 0.5]
         }
         
+        # Mapowanie flagi systemu !
+        self.satellite_system = satellite_system
+        if satellite_system == 'GPS':
+            self.gnss_system_flag = '-g'
+        elif satellite_system == 'GLONASS':
+            self.gnss_system_flag = '-n'
+        elif satellite_system == 'Galileo':
+            self.gnss_system_flag = '-l'
+        else:
+            self.gnss_system_flag = '-g'  # domyślnie GPS
+        
         print(f"[WORKER INIT] Utworzono GPSAnalysisThread z pozycjami anten:")
         print(f"[WORKER INIT]   Antena 1: {self.antenna_positions['antenna1']}")
         print(f"[WORKER INIT]   Antena 2: {self.antenna_positions['antenna2']}")
         print(f"[WORKER INIT]   Antena 3: {self.antenna_positions['antenna3']}")
+        print(f"[WORKER INIT]   System satelitarny: {self.satellite_system} (flaga: {self.gnss_system_flag})")
         self.current_buffcnt = 0
         self.current_lat = 0.0
         self.current_lon = 0.0
@@ -118,7 +132,7 @@ class GPSAnalysisThread(QThread):
         self.project_root_dir = os.path.dirname(app_dir)
         
         self.gnssdec_path = os.path.join(
-            self.project_root_dir, "backendhttp", "bin", "gnssdec"
+            self.project_root_dir, "backend", "bin", "gnssdec"
         )
         if self.file_paths:
             self.calculate_file_samples()
@@ -198,7 +212,6 @@ class GPSAnalysisThread(QThread):
                                     self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
                                     self.last_position_before_jamming = candidate_position
                         else:
-                            # Jamming jeszcze nie wykryty - zapisz jako tymczasowy kandydat
                             self.last_position_before_jamming = candidate_position
             
             elapsed = data.get('elapsed_time', 'N/A')
@@ -329,10 +342,9 @@ class GPSAnalysisThread(QThread):
                     }
                     print(f"[JAMMING THREAD]    Pozycja wyczyszczona - będzie aktualizowana przez nadchodzące dane gnssdec")
             else:
-                print(f"[JAMMING THREAD] ⏳ Brak zapisanej pozycji - będzie aktualizowana przez gnssdec")
+                print(f"[JAMMING THREAD] Brak zapisanej pozycji - będzie aktualizowana przez gnssdec")
             if len(self.file_paths) >= 2:
                 print(f"[JAMMING THREAD] Triangulacja będzie uruchomiona PO zakończeniu gnssdec z ostatnią pozycją")
-                # ZMIENIONE: NIE uruchamiamy triangulacji od razu - czekamy na koniec gnssdec
             else:
                 print(f"[JAMMING THREAD] Pominięto triangulację - za mało plików ({len(self.file_paths)})")
                 
@@ -489,10 +501,11 @@ class GPSAnalysisThread(QThread):
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji przed jammingiem!")
                 
                 # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
+                # WAŻNE: Konwertuj listy na numpy arrays - algorytm wymaga arrays!
                 antenna_positions_meters = [
-                    self.antenna_positions['antenna1'],  # [0.0, 0.0] - zawsze punkt odniesienia
-                    self.antenna_positions['antenna2'],  # np. [0.5, 0.0]
-                    self.antenna_positions['antenna3']   # np. [0.0, 0.5]
+                    np.array(self.antenna_positions['antenna1']),  # [0.0, 0.0] - zawsze punkt odniesienia
+                    np.array(self.antenna_positions['antenna2']),  # np. [0.5, 0.0]
+                    np.array(self.antenna_positions['antenna3'])   # np. [0.0, 0.5]
                 ]
                 
                 print(f"[TRIANGULATION THREAD] Pozycje anten przekazane do algorytmu:")
@@ -589,10 +602,11 @@ class GPSAnalysisThread(QThread):
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji!")
 
                 # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
+                # WAŻNE: Konwertuj listy na numpy arrays - algorytm wymaga arrays!
                 antenna_positions_meters = [
-                    self.antenna_positions['antenna1'],  # [0.0, 0.0] - zawsze punkt odniesienia
-                    self.antenna_positions['antenna2'],  # np. [0.5, 0.0]
-                    self.antenna_positions['antenna3']   # np. [0.0, 0.5]
+                    np.array(self.antenna_positions['antenna1']),  # [0.0, 0.0] - zawsze punkt odniesienia
+                    np.array(self.antenna_positions['antenna2']),  # np. [0.5, 0.0]
+                    np.array(self.antenna_positions['antenna3'])   # np. [0.0, 0.5]
                 ]
                 
                 print(f"[TRIANGULATION THREAD] Pozycje anten przekazane do algorytmu:")
@@ -676,7 +690,8 @@ class GPSAnalysisThread(QThread):
         
         try:
             print(f"[WORKER] Uruchamianie analizy {self.gnssdec_path}...")
-            gnssdec_command = [self.gnssdec_path, file1]
+            print(f"[WORKER] System satelitarny: {self.satellite_system} (flaga: {self.gnss_system_flag})")
+            gnssdec_command = [self.gnssdec_path, self.gnss_system_flag, file1]
             result = subprocess.run(gnssdec_command, check=True, capture_output=True, text=True)
             print(f"[WORKER] Analiza {self.gnssdec_path} zakończona.")
             
