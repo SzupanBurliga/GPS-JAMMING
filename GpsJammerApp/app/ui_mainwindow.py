@@ -418,6 +418,39 @@ class MainWindow(QMainWindow):
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.analyze_btn.setStyleSheet(action_button_style)
         
+        # Przycisk Stop z niestandardowym stylem
+        stop_button_style = """
+        QPushButton {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 15px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            margin: 4px;
+            min-height: 25px;
+        }
+        QPushButton:hover {
+            background-color: #c0392b;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+            transform: translateY(-2px);
+        }
+        QPushButton:pressed {
+            background-color: #a93226;
+            transform: translateY(0px);
+        }
+        QPushButton:disabled {
+            background-color: #95a5a6;
+            color: #bdc3c7;
+        }
+        """
+        
+        self.stop_btn = QPushButton("⏹️ Stop")
+        self.stop_btn.clicked.connect(self.stop_analysis)
+        self.stop_btn.setEnabled(False)  # Domyślnie wyłączony
+        self.stop_btn.setStyleSheet(stop_button_style)
+        
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setFormat("Gotowy do analizy")
@@ -444,7 +477,11 @@ class MainWindow(QMainWindow):
         action_group.setStyleSheet(group_style)
         action_layout = QVBoxLayout(action_group)
         
-        action_layout.addWidget(self.analyze_btn)   
+        # Horizontal layout dla przycisków Start/Stop
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self.analyze_btn)
+        buttons_layout.addWidget(self.stop_btn)
+        action_layout.addLayout(buttons_layout)
         
         layout.addWidget(action_group)
 
@@ -610,7 +647,8 @@ class MainWindow(QMainWindow):
 
         self.clear_markers_silently()
         self.jammer_shown = False
-        self.analyze_btn.setEnabled(False) 
+        self.analyze_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)  # Włącz przycisk Stop
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n")
@@ -624,6 +662,7 @@ class MainWindow(QMainWindow):
         self.analysis_thread.new_position_data.connect(self.update_map_position)
         self.analysis_thread.new_analysis_text.connect(self.update_analysis_text)
         self.analysis_thread.triangulation_complete.connect(self.on_triangulation_result)
+        self.analysis_thread.finished.connect(self.on_analysis_thread_finished)
         
         self.analysis_thread.start()
     
@@ -747,30 +786,73 @@ class MainWindow(QMainWindow):
             current_text = self.results_text.toPlainText()
             self.results_text.setPlainText(current_text + error_text)
 
+    def stop_analysis(self):
+        """Zatrzymuje trwającą analizę"""
+        if self.analysis_thread and self.analysis_thread.isRunning():
+            self.results_text.append("\n⏹️ Zatrzymywanie analizy...")
+            
+            # Ustaw flagę stop dla wątków w tle (triangulacja, jamming)
+            self.analysis_thread.stop_requested = True
+            
+            # Przerwij główny wątek QThread
+            self.analysis_thread.terminate()
+            self.analysis_thread.wait(3000)  # Czekaj max 3 sekundy
+            
+            # Wyłącz serwer HTTP jeśli istnieje
+            if hasattr(self.analysis_thread, 'shutdown_server'):
+                self.analysis_thread.shutdown_server()
+            
+            self.results_text.append("✅ Analiza została zatrzymana.")
+            
+            # Przywróć stan UI
+            self.analyze_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            self.progress_bar.setValue(0)
+            self.progress_bar.setFormat("Analiza przerwana")
+    
+    def on_analysis_thread_finished(self):
+        """Wywoływane gdy wątek analizy się zakończy (normalnie lub przez terminate)"""
+        self.analyze_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+
     def analysis_finished(self, points):
-        self.analyze_btn.setEnabled(True) 
+        self.analyze_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)  # Wyłącz przycisk Stop
 
         if points and len(points) > 0:
-            result = points[0]
-            if result.get('type') == 'jamming':
-                start_sample = result.get('start_sample')
-                end_sample = result.get('end_sample')
+            # Sprawdź czy to wyniki jammingu czy brak jammingu
+            first_result = points[0]
+            
+            if first_result.get('type') == 'jamming':
+                # Wyświetl wszystkie okresy jammingu
+                jamming_text = f"🔴 Wykryto {len(points)} okres(ów) jammingu:\n\n"
                 
-                if end_sample is not None:
-                    jamming_text = f"Znaleziono jamming"
-                else:
-                    jamming_text = f"Znaleziono jamming [{start_sample}, koniec pliku]"
+                for result in points:
+                    event_num = result.get('event_number', '?')
+                    start_sample = result.get('start_sample')
+                    end_sample = result.get('end_sample')
+                    duration = result.get('duration', 0)
                     
+                    jamming_text += f"Zdarzenie {event_num}:\n"
+                    jamming_text += f"  Próbki: {start_sample} - {end_sample}\n"
+                    jamming_text += f"  Długość: {duration} próbek\n"
+                    
+                    # Przelicz na czas jeśli znamy częstotliwość próbkowania (2.048 MHz)
+                    duration_ms = (duration / 2048000) * 1000
+                    jamming_text += f"  Czas: {duration_ms:.2f} ms\n\n"
+                
                 self.results_text.setPlainText(jamming_text)
-                triangulation = result.get('triangulation')
+                
+                # Triangulacja tylko dla pierwszego zdarzenia
+                triangulation = first_result.get('triangulation')
                 if triangulation:
                     self.display_final_triangulation_result(triangulation)
                 
                 return
             
-            elif result.get('type') == 'no_jamming':
-                self.results_text.setPlainText("Nie znaleziono punktów zakłóceń lub błąd analizy.")
-                triangulation = result.get('triangulation')
+            elif first_result.get('type') == 'no_jamming':
+                self.results_text.setPlainText("✅ Nie wykryto żadnych zakłóceń w sygnale.")
+                triangulation = first_result.get('triangulation')
                 if triangulation:
                     self.display_final_triangulation_result(triangulation)
                 return
