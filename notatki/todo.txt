@@ -1,7 +1,4 @@
 do zrobienia: (ASAP)
-- lockowanie UI podczas rozpoczęcia analizy
-to na końcu
-
 
 Plan 200%
 - dodać generowanie sygnałów Galileo, Glonass w symulacjach
@@ -9,9 +6,9 @@ Plan 200%
 
 
 W trakcie:
-- usunąć te wszystkie useless komentarze i notatki, jednym słowem posprzątać
 
 Gotowe:
+- usunąć te wszystkie useless komentarze i notatki, jednym słowem posprzątać
 - połączenie nowych opcji od kuby
 - zrobić funkcjonalne ustawienia ( ten próg do ustawienia w wykrywaniu jammingu)
 - naprawić mape (tam małe poprawki :))
