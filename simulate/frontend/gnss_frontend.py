@@ -90,13 +90,12 @@ class App(tk.Tk):
             tk.Radiobutton(radios, text=text, variable=self.mode_var, value=value)\
                 .grid(row=0, column=i, padx=(0 if i == 0 else 16, 0), sticky="w")
 
-        # panel jammera
+
         self.jammer_frame = tk.Frame(self.root_frame)
         self.jammer_frame.grid(row=4, column=0, pady=(16,8), sticky="w")
         self.jammer_frame.columnconfigure(0, weight=0)
         self.jammer_frame.columnconfigure(1, weight=1)
 
-        # Pola jammera (tak jak były)
         self.jammer_labels = [           
             "Szerokość geograficzna jammera:",
             "Długość geograficzna jammera:",
@@ -173,22 +172,20 @@ class App(tk.Tk):
         self.EPHERIS_FILE_PATH = os.path.join(gps_dir, "brdc2830.25n")
         self.JAMMERS_DIR_PATH = os.path.join(base_dir, "jammers")
         self.MIXER_SCRIPT_PATH = os.path.join(base_dir, "add_jammer_and_mix.py")
+        self.WEAKEN_SCRIPT_PATH = os.path.join(base_dir, "weaken_gps.py")
         self.set_basic_defaults()
 
     def _validate_lat_key(self, P: str) -> bool:
-        """LAT: dopuszcza -?, do 2 cyfr + opcjonalna . i do 7 miejsc po kropce (format); zakres sprawdzimy później."""
         if P == "":
             return True
         return re.fullmatch(r"^-?\d{0,2}(\.\d{0,7})?$", P) is not None
 
     def _validate_lon_key(self, P: str) -> bool:
-        """LON: dopuszcza -?, do 3 cyfr + opcjonalna . i do 7 miejsc po kropce (format); zakres sprawdzimy później."""
         if P == "":
             return True
         return re.fullmatch(r"^-?\d{0,3}(\.\d{0,7})?$", P) is not None
 
     def _validate_alt_key(self, P: str) -> bool:
-        """ALT: liczba zmiennoprzecinkowa z opcjonalnym minusem; do 3 miejsc po kropce (format)."""
         if P == "":
             return True
         return re.fullmatch(r"^-?\d{0,6}(\.\d{0,3})?$", P) is not None
@@ -197,7 +194,6 @@ class App(tk.Tk):
         return P.isdigit() or P == ""
 
     def _validate_range_key(self, P: str) -> bool:
-        """Zasięg jammera: liczba dodatnia, do 2 miejsc po kropce."""
         if P == "":
             return True
         return re.fullmatch(r"^\d{0,6}(\.\d{0,2})?$", P) is not None
@@ -249,7 +245,7 @@ class App(tk.Tk):
                 ent.grid_remove()
 
     def set_basic_defaults(self):
-        """Ustawia domyślne wartości w polach formularza"""
+        # domysle wartosci
         defaults = [
             "test.bin",
             "120",
@@ -297,7 +293,7 @@ class App(tk.Tk):
                     print(line.rstrip())
             rc = proc.wait()
             if rc == 0:
-                msg = f"Plik został wygenerowany pomyślnie!\n\nNazwa pliku: {output_filename}\nLokalizacja: /frontend/"
+                msg = f"Plik został wygenerowany pomyślnie!\n\nNazwa pliku: {output_filename}\nLokalizacja: /GPS-JAMMING/GpsJammerApp"
             else:
                 msg = f"Błąd podczas generowania (kod {rc})"
             
@@ -307,6 +303,54 @@ class App(tk.Tk):
         except Exception as e:
             self.after(0, lambda: messagebox.showerror("Error", f"Wystąpił wyjątek: {e}"))
         finally:
+            self.after(0, lambda: self.start_btn_state(True))
+
+    def _run_weaken_sequence_thread(self, gps_cmd, weaken_cmd, final_filename):
+        """Sekwencja dla trybu A: Generowanie GPS -> Osłabianie sygnału"""
+        try:
+            print("--- ROZPOCZĘCIE SEKWENCJI OSŁABIANIA GPS ---")
+            print(f"Polecenie: {' '.join(gps_cmd)}")
+            result_gps = subprocess.run(gps_cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+            print(result_gps.stderr)
+            print("Krok 1/2: Sygnał GPS wygenerowany.")
+
+            print(f"Krok 2/2: Osłabianie sygnału GPS...")
+            print(f"Polecenie: {' '.join(weaken_cmd)}")
+            result_weaken = subprocess.run(weaken_cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+            print(result_weaken.stdout)
+            if result_weaken.stderr:
+                print(result_weaken.stderr)
+            print("Krok 2/2: Osłabianie zakończone.")
+            
+            traj_file = 'traj.csv'
+            if os.path.exists(traj_file):
+                try:
+                    os.remove(traj_file)
+                    print(f"Plik {traj_file} został pomyślnie usunięty.")
+                except OSError as e:
+                    print(f"Ostrzeżenie: Nie można usunąć pliku {traj_file}. Błąd: {e}")
+            
+            msg = (f"Symulacja z osłabionym sygnałem GPS zakończona pomyślnie!\n\n"
+                   f"Plik wyjściowy: {final_filename}\n"
+                   f"(Oryginalny plik GPS został nadpisany)")
+            self.after(0, lambda: messagebox.showinfo("Sukces", msg))
+
+        except subprocess.CalledProcessError as e:
+            error_msg = (f"Błąd podczas wykonywania polecenia:\n{' '.join(e.cmd)}\n\n"
+                         f"Błąd (stderr):\n{e.stderr}\n\n"
+                         f"Output (stdout):\n{e.stdout}")
+            print(f"BŁĄD SEKWENCJI: {error_msg}")
+            self.after(0, lambda: messagebox.showerror("Błąd sekwencji", error_msg))
+        except FileNotFoundError as e:
+            error_msg = f"Nie znaleziono pliku lub skryptu: {e.filename}"
+            print(f"BŁĄD SEKWENCJI: {error_msg}")
+            self.after(0, lambda: messagebox.showerror("Błąd - brak pliku", error_msg))
+        except Exception as e:
+            error_msg = f"Wystąpił nieoczekiwany błąd: {e}"
+            print(f"BŁĄD SEKWENCJI: {error_msg}")
+            self.after(0, lambda: messagebox.showerror("Błąd", error_msg))
+        finally:
+            print("--- ZAKOŃCZENIE SEKWENCJI OSŁABIANIA GPS ---")
             self.after(0, lambda: self.start_btn_state(True))
 
     def _run_jammer_sequence_thread(self, gps_cmd, jammer_cmd, mixer_cmd, final_filename):
@@ -419,11 +463,13 @@ class App(tk.Tk):
         t_mobile     = T_MOBILE     if TIMEREG.match(T_MOBILE)     else "2025/10/10,00:00:00"
 
         if mode == "A":
+            # Tryb A: Generowanie GPS -> Osłabianie sygnału (bez jammera)
+            gps_cmd = []
             if not self.is_ruchomy.get():
                 lat = values[idx_lat_start]
                 lon = values[idx_lon_start]
                 alt = values[idx_alt_start]
-                cmd = [
+                gps_cmd = [
                     self.GPS_SDR_SIM_PATH,
                     "-e", self.EPHERIS_FILE_PATH,
                     "-l", f"{lat},{lon},{alt}",
@@ -434,8 +480,6 @@ class App(tk.Tk):
                     "-s", SAMPLERATE,
                     "-v"
                 ]
-                self.start_btn_state(False)
-                threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
             else:
                 traj_path = self.run_generate_trajectory(
                     start_lat=values[idx_lat_start],
@@ -451,7 +495,7 @@ class App(tk.Tk):
                 if traj_path is None:
                     return 
 
-                cmd = [
+                gps_cmd = [
                     self.GPS_SDR_SIM_PATH,
                     "-e", self.EPHERIS_FILE_PATH,
                     "-u", traj_path,
@@ -462,8 +506,22 @@ class App(tk.Tk):
                     "-s", SAMPLERATE,
                     "-v"
                 ]
-                self.start_btn_state(False)
-                threading.Thread(target=self._run_cmd_thread, args=(cmd, filename), daemon=True).start()
+            
+            # Przygotowanie polecenia osłabiającego
+            weaken_cmd = [
+                sys.executable,
+                self.WEAKEN_SCRIPT_PATH,
+                "--input-file", filename,
+                "--output-file", filename  # Nadpisuje oryginalny plik
+            ]
+            
+            print(f"Rozpoczynanie sekwencji Trybu A (Osłabiony GPS) dla pliku: {filename}")
+            self.start_btn_state(False)
+            threading.Thread(
+                target=self._run_weaken_sequence_thread,
+                args=(gps_cmd, weaken_cmd, filename),
+                daemon=True
+            ).start()
         
         elif mode == "B":
             try:
@@ -661,30 +719,6 @@ class App(tk.Tk):
             return val > 0.0
         except ValueError:
             return False
-
-    def run_mode_script(self,mode, args):
-        scripts = {
-            "A": "mode_a.py",
-            "B": "mode_b.py",
-            "C": "mode_c.py"
-        }
-
-        script_name = scripts.get(mode)
-
-        if not script_name:
-            messagebox.showerror("Błąd", "Nieznany tryb!")
-            return
-
-        script_path = os.path.join(os.path.dirname(__file__), script_name)
-        if not os.path.isfile(script_path):
-            messagebox.showerror("Błąd", f"Nie znaleziono skryptu: {script_name}")
-            return
-
-        cmd = [sys. executable, script_path] + args
-        try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError as e:
-            messagebox.showerror("Błąd", f"Błąd podczas uruchamiania skryptu: {e}")
 
     def run_generate_trajectory(self, start_lat, start_lon, start_alt,
                                 end_lat, end_lon, end_alt,

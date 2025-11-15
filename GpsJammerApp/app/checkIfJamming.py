@@ -7,7 +7,7 @@ CHUNK_SIZE_BYTES = 131072
 def analyze_chunk_power(
     raw_uint8_chunk: np.ndarray, 
     power_threshold: float
-) -> (bool, float):
+) -> tuple[bool, float]:
     
     if raw_uint8_chunk.size % 2 != 0 or raw_uint8_chunk.size == 0:
         return False, 0.0
@@ -19,11 +19,18 @@ def analyze_chunk_power(
     
     return is_jamming_now, average_power
 
-def analyze_file_for_jamming(file_path: str, power_threshold: float) -> tuple:
+def analyze_file_for_jamming(file_path: str, power_threshold: float) -> list:
+    """
+    Analizuje plik IQ i zwraca listę wszystkich wykrytych okresów jammingu.
+    
+    Returns:
+        list: Lista krotek (start_sample, end_sample) dla każdego okresu jammingu.
+              Zwraca pustą listę jeśli nie wykryto jammingu.
+    """
     current_jamming_state = False 
     total_samples_processed = 0
-    jamming_start_sample = None
-    jamming_end_sample = None
+    jamming_events = []  # Lista wszystkich zdarzeń jammingu
+    current_jamming_start = None
     
     try:
         with open(file_path, 'rb') as f:
@@ -46,23 +53,28 @@ def analyze_file_for_jamming(file_path: str, power_threshold: float) -> tuple:
                 was_jamming_previously = current_jamming_state
                 timestamp_sample = total_samples_processed
 
+                # Wykryto początek jammingu
                 if is_jamming_now and not was_jamming_previously:
-                    jamming_start_sample = timestamp_sample
+                    current_jamming_start = timestamp_sample
                 
+                # Wykryto koniec jammingu - zapisz zdarzenie
                 elif not is_jamming_now and was_jamming_previously:
-                    jamming_end_sample = timestamp_sample
+                    if current_jamming_start is not None:
+                        jamming_events.append((current_jamming_start, timestamp_sample))
+                        current_jamming_start = None
 
                 current_jamming_state = is_jamming_now
                 total_samples_processed += num_new_samples_in_chunk
 
-        if current_jamming_state and jamming_start_sample is not None:
-            jamming_end_sample = total_samples_processed
+        # Jeśli jamming trwa do końca pliku, zapisz ostatnie zdarzenie
+        if current_jamming_state and current_jamming_start is not None:
+            jamming_events.append((current_jamming_start, total_samples_processed))
             
-        return jamming_start_sample, jamming_end_sample
+        return jamming_events
         
     except Exception as e:
         print(f"Błąd podczas analizy pliku: {e}")
-        return None, None
+        return []
 
 def calibrate_file(file_path: str):
     power_values = []
@@ -146,14 +158,16 @@ if __name__ == "__main__":
         calibrate_file(SDR_FILE_PATH)
         
     elif MODE == 'analyze':
-        jamming_start, jamming_end = analyze_file_for_jamming(
+        jamming_events = analyze_file_for_jamming(
             SDR_FILE_PATH, 
             CALIBRATED_POWER_THRESHOLD
         )
         
-        if jamming_start is not None and jamming_end is not None:
-            print(f"WYNIK: jamming_start_sample={jamming_start}, jamming_end_sample={jamming_end}")
-        elif jamming_start is not None:
-            print(f"WYNIK: jamming_start_sample={jamming_start}, jamming_end_sample=EOF")
+        if not jamming_events:
+            print("WYNIK: Nie wykryto żadnego jammingu")
+            print("jamming_events=[]")
         else:
-            print("WYNIK: jamming_start_sample=None, jamming_end_sample=None")
+            print(f"WYNIK: Wykryto {len(jamming_events)} okres(ów) jammingu:")
+            for i, (start, end) in enumerate(jamming_events, 1):
+                print(f"  Zdarzenie {i}: próbki {start} - {end} (długość: {end - start} próbek)")
+            print(f"\njamming_events={jamming_events}")
