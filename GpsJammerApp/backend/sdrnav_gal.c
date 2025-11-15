@@ -241,8 +241,6 @@ extern int decode_page_e1b(const uint8_t *buff1, const uint8_t *buff2,
     uint8_t buff[30];
     memcpy(buff,buff1,15); memcpy(&buff[15],buff2,15);
     
-    int i;
-    
     id=getbitu(buff,2,6); /* word type */
     switch (id) {
     case 0: 

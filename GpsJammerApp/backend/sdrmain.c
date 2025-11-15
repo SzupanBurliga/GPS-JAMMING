@@ -18,6 +18,7 @@ sdrstat_t sdrstat = {0};
 sdrch_t sdrch[MAXSAT] = {{0}};
 sdrekf_t sdrekf = {0};
 sdrgui_t sdrgui = {0};
+int hold_enabled = 0;
 
 int main(int argc, char **argv) {
     int sys_type = SYS_GPS;  /* default to GPS */
@@ -25,14 +26,15 @@ int main(int argc, char **argv) {
     int opt;
 
     if (argc < 2) {
-        printf("Użycie: %s [-g|-a|-l] <plik_do_analizy>\n", argv[0]);
+        printf("Użycie: %s [-g|-a|-l|-h] <plik_do_analizy>\n", argv[0]);
         printf("  -g    tryb GPS (domyślny)\n");
         printf("  -a    tryb Galileo\n");
         printf("  -l    tryb GLONASS\n");
+        printf("  -h    włącza system hold pozycji\n");
         return 1;
     }
 
-    while ((opt = getopt(argc, argv, "gal")) != -1) {
+    while ((opt = getopt(argc, argv, "galh")) != -1) {
         switch (opt) {
         case 'g':
             sys_type = SYS_GPS;
@@ -43,15 +45,18 @@ int main(int argc, char **argv) {
         case 'l':
             sys_type = SYS_GLO;
             break;
+        case 'h':
+            hold_enabled = 1;
+            break;
         default:
-            printf("Użycie: %s [-g|-a|-l] <plik_do_analizy>\n", argv[0]);
+            printf("Użycie: %s [-g|-a|-l|-h] <plik_do_analizy>\n", argv[0]);
             return 1;
         }
     }
 
     if (optind >= argc) {
         printf("Błąd: brak nazwy pliku\n");
-        printf("Użycie: %s [-g|-a|-l] <plik_do_analizy>\n", argv[0]);
+        printf("Użycie: %s [-g|-a|-l|-h] <plik_do_analizy>\n", argv[0]);
         return 1;
     }
 

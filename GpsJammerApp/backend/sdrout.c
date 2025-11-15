@@ -142,42 +142,52 @@ extern void updateNavStatusWin(int counter) {
     static double hold_lat = 0.0, hold_lon = 0.0, hold_hgt = 0.0;
     static double hold_time = 0.0;
     const int MIN_VALID_NSAT = 4;
-    const double MAX_JUMP_SPEED = 500.0; /* m/s */
+    const double MAX_DEG_DIFF = 1.0;
     double current_time = sdrstat.elapsedTime;
-    int fix_valid = (nsat >= MIN_VALID_NSAT);
-
-    if (fix_valid && hold_valid) {
-        double dt = current_time - hold_time;
-        if (dt > 0.0) {
-            double lat1 = hold_lat * PI / 180.0;
-            double lat2 = lat * PI / 180.0;
-            double dlat = lat2 - lat1;
-            double dlon = (lon - hold_lon) * PI / 180.0;
-            double sin_dlat = sin(dlat / 2.0);
-            double sin_dlon = sin(dlon / 2.0);
-            double a = sin_dlat * sin_dlat +
-                       cos(lat1) * cos(lat2) * sin_dlon * sin_dlon;
-            double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
-            double distance = 6371000.0 * c;
-            double speed = distance / dt;
-            if (speed > MAX_JUMP_SPEED) {
-                fix_valid = 0;
-            }
-        }
-    }
+    int position_finite =
+        isfinite(lat) && isfinite(lon) && isfinite(hgt);
+    int fix_valid = (nsat >= MIN_VALID_NSAT) && position_finite;
 
     int hold_applied = 0;
-    if (!fix_valid && hold_valid) {
-        lat = hold_lat;
-        lon = hold_lon;
-        hgt = hold_hgt;
-        hold_applied = 1;
-    } else if (fix_valid) {
-        hold_lat = lat;
-        hold_lon = lon;
-        hold_hgt = hgt;
-        hold_time = current_time;
-        hold_valid = 1;
+    if (hold_enabled) {
+        if (fix_valid && !hold_valid) {
+            hold_lat = lat;
+            hold_lon = lon;
+            hold_hgt = hgt;
+            hold_time = current_time;
+            hold_valid = 1;
+        } else if (fix_valid && hold_valid) {
+            double dlat_deg = fabs(lat - hold_lat);
+            double dlon_deg = fabs(lon - hold_lon);
+            int within_bounds =
+                (dlat_deg <= MAX_DEG_DIFF) && (dlon_deg <= MAX_DEG_DIFF);
+            if (within_bounds) {
+                hold_lat = lat;
+                hold_lon = lon;
+                hold_hgt = hgt;
+                hold_time = current_time;
+            } else {
+                lat = hold_lat;
+                lon = hold_lon;
+                hgt = hold_hgt;
+                hold_applied = 1;
+            }
+        } else if (hold_valid) {
+            lat = hold_lat;
+            lon = hold_lon;
+            hgt = hold_hgt;
+            hold_applied = 1;
+        }
+    } else {
+        hold_valid = 0;
+    }
+
+    if (!isfinite(lat) || !isfinite(lon)) {
+        lat = 0.0;
+        lon = 0.0;
+    }
+    if (!isfinite(hgt)) {
+        hgt = 0.0;
     }
 
     #define JSON_APPEND(fmt, ...)                                                          \

@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+extern int hold_enabled;
+
 #define ROUND(x) ((int)floor((x) + 0.5))
 #define PI 3.1415926535897932
 #define DPI (2.0 * PI)

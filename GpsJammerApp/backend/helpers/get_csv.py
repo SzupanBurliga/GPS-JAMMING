@@ -61,12 +61,24 @@ class CSVRequestHandler(BaseHTTPRequestHandler):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Uruchom gnssdec i zbierz CSV (elapsed_time, lat, lon)"
+        description="Uruchom gnssdec i zbierz CSV (elapsed_time, lat, lon)",
+        add_help=False,
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-g", action="store_true", help="tryb GPS")
     group.add_argument("-a", action="store_true", help="tryb Galileo")
     group.add_argument("-l", action="store_true", help="tryb GLONASS")
+    parser.add_argument(
+        "-h",
+        "--hold",
+        action="store_true",
+        help="włącza tryb hold pozycji w gnssdec",
+    )
+    parser.add_argument(
+        "--help",
+        action="help",
+        help="pokaż ten komunikat i zakończ",
+    )
     parser.add_argument(
         "input_file", type=Path, help="ścieżka do nagrania (np. *.bin)"
     )
@@ -112,7 +124,10 @@ def main():
         )
         server_thread.start()
 
-        cmd = [str(gnssdec_path), flag, str(input_path)]
+        cmd = [str(gnssdec_path), flag]
+        if args.hold:
+            cmd.append("-h")
+        cmd.append(str(input_path))
         proc = subprocess.Popen(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
