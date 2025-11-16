@@ -20,16 +20,9 @@ def analyze_chunk_power(
     return is_jamming_now, average_power
 
 def analyze_file_for_jamming(file_path: str, power_threshold: float) -> list:
-    """
-    Analizuje plik IQ i zwraca listę wszystkich wykrytych okresów jammingu.
-    
-    Returns:
-        list: Lista krotek (start_sample, end_sample) dla każdego okresu jammingu.
-              Zwraca pustą listę jeśli nie wykryto jammingu.
-    """
     current_jamming_state = False 
     total_samples_processed = 0
-    jamming_events = []  # Lista wszystkich zdarzeń jammingu
+    jamming_events = [] 
     current_jamming_start = None
     
     try:
@@ -53,11 +46,9 @@ def analyze_file_for_jamming(file_path: str, power_threshold: float) -> list:
                 was_jamming_previously = current_jamming_state
                 timestamp_sample = total_samples_processed
 
-                # Wykryto początek jammingu
                 if is_jamming_now and not was_jamming_previously:
                     current_jamming_start = timestamp_sample
                 
-                # Wykryto koniec jammingu - zapisz zdarzenie
                 elif not is_jamming_now and was_jamming_previously:
                     if current_jamming_start is not None:
                         jamming_events.append((current_jamming_start, timestamp_sample))
@@ -66,7 +57,6 @@ def analyze_file_for_jamming(file_path: str, power_threshold: float) -> list:
                 current_jamming_state = is_jamming_now
                 total_samples_processed += num_new_samples_in_chunk
 
-        # Jeśli jamming trwa do końca pliku, zapisz ostatnie zdarzenie
         if current_jamming_state and current_jamming_start is not None:
             jamming_events.append((current_jamming_start, total_samples_processed))
             

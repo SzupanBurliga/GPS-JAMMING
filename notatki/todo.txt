@@ -1,19 +1,17 @@
 do zrobienia: (ASAP)
 
-to na końcu
-- usunąć te wszystkie useless komentarze i notatki, jednym słowem posprzątać
-
 Plan 200%
 - dodać generowanie sygnałów Galileo, Glonass w symulacjach
 - poprawić algorytm do wykrywania jammingu
 
 
 W trakcie:
-- zmienienie mocy czystego pliku symulacyjnego (zmniejszyć moc)
 
 Gotowe:
+- usunąć te wszystkie useless komentarze i notatki, jednym słowem posprzątać
 - połączenie nowych opcji od kuby
 - zrobić funkcjonalne ustawienia ( ten próg do ustawienia w wykrywaniu jammingu)
 - naprawić mape (tam małe poprawki :))
 - naprawić skrypt tak, żeby odpalał się thread kamila zanim się skończy analiza
-- zrobić jeszcze tak, żeby było to dostępne dla 2 plików, a nie blokowało, że tylko dla 2   
+- zrobić jeszcze tak, żeby było to dostępne dla 2 plików, a nie blokowało, że tylko dla 2 
+- zmienienie mocy czystego pliku symulacyjnego (zmniejszyć moc)  

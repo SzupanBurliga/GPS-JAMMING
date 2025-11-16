@@ -65,7 +65,7 @@ class GPSAnalysisThread(QThread):
     progress_update = Signal(int, str)
     new_analysis_text = Signal(str) 
     new_position_data = Signal(float, float, float)
-    jamming_analysis_complete = Signal(list)  # Teraz emituje listę zdarzeń [(start, end), ...]
+    jamming_analysis_complete = Signal(list) 
     triangulation_complete = Signal(dict)
 
     def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None, satellite_system='GPS'):
@@ -102,9 +102,9 @@ class GPSAnalysisThread(QThread):
         self.current_gdop = 0.0
         self.current_clk_bias = 0.0
         self.jamming_detected = False
-        self.jamming_events = []  # Lista wszystkich okresów jammingu [(start, end), ...]
-        self.jamming_start_sample = None  # Dla kompatybilności - pierwszy start
-        self.jamming_end_sample = None    # Dla kompatybilności - pierwszy end
+        self.jamming_events = []
+        self.jamming_start_sample = None  
+        self.jamming_end_sample = None 
         self.http_server = None
         self.http_thread = None
         self.jamming_thread = None
@@ -114,7 +114,7 @@ class GPSAnalysisThread(QThread):
         self.triangulation_result = None
         self.jamming_analysis_finished = False 
         self.triangulation_started = False
-        self.stop_requested = False  # Flaga do zatrzymywania wątków w tle
+        self.stop_requested = False 
         self.last_position_before_jamming = {
             'lat': 0.0,
             'lon': 0.0,
@@ -180,10 +180,8 @@ class GPSAnalysisThread(QThread):
                 
                 if self.current_lat != 0.0 and self.current_lon != 0.0:
                     if self.jamming_analysis_finished and self.jamming_events and not self.triangulation_started:
-                        # Analiza jammingu zakończona - sprawdź czy aktualna próbka jest przed pierwszym jammingiem
                         first_jamming_start = self.jamming_events[0][0]
                         if self.current_buffcnt < first_jamming_start:
-                            # Sprawdź czy to jest nowsza pozycja niż już zapisana
                             if (not self.last_position_before_jamming['valid'] or 
                                 self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
                                 self.last_position_before_jamming = {
@@ -194,7 +192,6 @@ class GPSAnalysisThread(QThread):
                                     'valid': True
                                 }
                     elif not self.triangulation_started:
-                        # Analiza jammingu jeszcze trwa - zapisuj pozycję jako kandydata
                         candidate_position = {
                             'lat': self.current_lat,
                             'lon': self.current_lon,
@@ -202,11 +199,8 @@ class GPSAnalysisThread(QThread):
                             'buffcnt': self.current_buffcnt,
                             'valid': True
                         }
-                        
-                        # Sprawdź czy już mamy wykryty jamming
                         if self.jamming_events:
                             first_jamming_start = self.jamming_events[0][0]
-                            # Jamming już wykryty - sprawdź czy kandydat jest przed pierwszym jammingiem
                             if self.current_buffcnt < first_jamming_start:
                                 if (not self.last_position_before_jamming['valid'] or 
                                     self.current_buffcnt > self.last_position_before_jamming['buffcnt']):
@@ -277,13 +271,8 @@ class GPSAnalysisThread(QThread):
         return self.triangulation_result
     
     def is_in_jamming_range(self):
-        """
-        Sprawdza czy aktualna próbka jest w którymkolwiek okresie jammingu.
-        """
         if not self.jamming_analysis_finished or not self.jamming_events:
             return False
-        
-        # Sprawdź wszystkie okresy jammingu
         for start, end in self.jamming_events:
             if start <= self.current_buffcnt < end:
                 return True
@@ -291,10 +280,6 @@ class GPSAnalysisThread(QThread):
         return False
     
     def should_update_gui_position(self):
-        """
-        Sprawdza czy należy aktualizować pozycję w GUI.
-        Nie aktualizujemy jeśli jesteśmy w którymkolwiek okresie jammingu.
-        """
         if not self.jamming_analysis_finished:
             return True
         if not self.jamming_events:
@@ -304,15 +289,8 @@ class GPSAnalysisThread(QThread):
         return True
 
     def on_jamming_detected(self, jamming_events_list):
-        """
-        Obsługuje wyniki analizy jammingu - może być wiele okresów.
-        
-        Args:
-            jamming_events_list: Lista krotek [(start1, end1), (start2, end2), ...]
-        """
         self.jamming_events = jamming_events_list if jamming_events_list else []
         
-        # Dla kompatybilności ze starym kodem - ustaw pierwszy okres jako główny
         if self.jamming_events:
             self.jamming_start_sample = self.jamming_events[0][0]
             self.jamming_end_sample = self.jamming_events[0][1]
@@ -435,7 +413,6 @@ class GPSAnalysisThread(QThread):
                 import time
                 wait_time = 0.0
 
-                # Najpierw poczekaj aż wykryty zostanie jamming (start_sample ustawiony).
                 while not (self.jamming_detected and self.jamming_events):
                     if self.stop_requested:
                         print("[TRIANGULATION THREAD] Zatrzymano przez użytkownika")
@@ -445,8 +422,6 @@ class GPSAnalysisThread(QThread):
                     if int(wait_time) % 10 == 0:
                         print(f"[TRIANGULATION THREAD] Czekam na wykrycie jammingu... ({wait_time:.0f}s)")
 
-                # Gdy znamy okresy jammingu, użyj pierwszego okresu do triangulacji
-                # Poczekaj aż gnssdec przetworzy próbki co najmniej do pierwszego jammingu
                 start_sample = self.jamming_events[0][0]
                 num_events = len(self.jamming_events)
                 print(f"[TRIANGULATION THREAD] Wykryto {num_events} okres(ów) jammingu")
@@ -462,7 +437,6 @@ class GPSAnalysisThread(QThread):
                     # co 10s loguj status
                     if int(wait_time) % 10 == 0:
                         print(f"[TRIANGULATION THREAD] Czekam aż gnssdec osiągnie próbkę {start_sample}... (current_buffcnt={self.current_buffcnt}, waited={wait_time:.0f}s)")
-                    # Safety: jeśli czekamy bardzo długo (np. >120s), przerwij i użyj najlepszej dostępnej pozycji
                     if wait_time > 120:
                         print(f"[TRIANGULATION THREAD] Oczekiwanie przekroczyło 120s — używam najlepszej dostępnej pozycji przed jammigem.")
                         break
@@ -474,9 +448,6 @@ class GPSAnalysisThread(QThread):
                 
                 print(f"[TRIANGULATION THREAD] Gotowe do triangulacji po {wait_time}s oczekiwania")
 
-                # Zablokuj dalsze aktualizacje pozycji - triangulacja używa aktualnej pozycji
-                # Ustaw flagę triangulation_started żeby proces_incoming_data przestał
-                # nadpisywać kandydata na ostatnią pozycję przed jammigem.
                 self.triangulation_started = True
                 final_position = self.last_position_before_jamming.copy()
                 print(f"[TRIANGULATION THREAD] ZABLOKOWANIE pozycji referencyjnej: {final_position['lat']:.8f}, {final_position['lon']:.8f} (próbka {final_position['buffcnt']})")
@@ -600,9 +571,6 @@ class GPSAnalysisThread(QThread):
                     ref_lon = 19.93658
                     print(f"[TRIANGULATION THREAD] Punkt referencyjny (fallback): {ref_lat:.6f}, {ref_lon:.6f}")
                     print(f"[TRIANGULATION THREAD] UWAGA: Brak zapisanej pozycji!")
-
-                # Przygotuj pozycje anten w formacie dla triangulate_jammer_location
-                # WAŻNE: Konwertuj listy na numpy arrays - algorytm wymaga arrays!
                 antenna_positions_meters = [
                     np.array(self.antenna_positions['antenna1']),  # [0.0, 0.0] - zawsze punkt odniesienia
                     np.array(self.antenna_positions['antenna2']),  # np. [0.5, 0.0]
@@ -653,7 +621,6 @@ class GPSAnalysisThread(QThread):
         self.triangulation_thread.start()
 
     def run(self):
-        # Resetuj flagę stop na początku nowej analizy
         self.stop_requested = False
         
         _DataReceiverHandler.thread_instance = self
@@ -730,7 +697,6 @@ class GPSAnalysisThread(QThread):
             print("[WORKER] Wątek zakończył pracę. Odblokowanie UI.")
 
             if self.jamming_detected and self.jamming_events:
-                # Buduj wyniki dla wszystkich okresów jammingu
                 result_info = []
                 for i, (start, end) in enumerate(self.jamming_events):
                     result_info.append({
@@ -768,9 +734,8 @@ class GPSAnalysisThread(QThread):
         
         if self.triangulation_thread and self.triangulation_thread.is_alive():
             print("[WORKER] Czekam na zakończenie triangulacji...")
-            # Ustaw flagę stop jeśli jeszcze nie została ustawiona
             self.stop_requested = True
-            self.triangulation_thread.join(timeout=3)  # Krótszy timeout - thread powinien szybko zareagować
+            self.triangulation_thread.join(timeout=3)
             if self.triangulation_thread.is_alive():
                 print("[WORKER] ⚠️ OSTRZEŻENIE: Triangulacja nadal trwa (zostanie zatrzymana automatycznie)...")
             else:

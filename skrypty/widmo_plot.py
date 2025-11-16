@@ -8,11 +8,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 def compute_psd_iq_uint8(path, fs, nfft=131072, overlap=0.5, max_segments=None):
-    """
-    Liczy średnie widmo mocy (PSD) dla pliku rtl_sdr:
-    - format: I/Q interleaved, uint8 (0..255), offset 128
-    - przetwarzanie blokami (Welch), okno Hann, overlap
-    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
@@ -20,13 +15,11 @@ def compute_psd_iq_uint8(path, fs, nfft=131072, overlap=0.5, max_segments=None):
     mm = np.memmap(path, dtype=np.uint8, mode='r')
     total_bytes = mm.size
     if total_bytes < 2*nfft:
-        # mały plik — wczytaj na raz i doraźnie dopaduj
         data = np.asarray(mm, dtype=np.float32) - 128.0
         if data.size % 2 != 0:
             data = data[:-1]
         I = data[0::2]; Q = data[1::2]
         x = (I + 1j*Q)
-        # dopaduj do nfft
         if x.size < nfft:
             tmp = np.zeros(nfft, dtype=np.complex64)
             tmp[:x.size] = x
@@ -36,11 +29,10 @@ def compute_psd_iq_uint8(path, fs, nfft=131072, overlap=0.5, max_segments=None):
         Pxx = (np.abs(X)**2) / (win**2).sum()
         return Pxx, 1
 
-    nsamp = total_bytes // 2  # I/Q => 2 bajty na próbkę zespoloną
+    nsamp = total_bytes // 2 
     seg = nfft
     step = max(1, int(seg * (1.0 - overlap)))
 
-    # liczba pełnych segmentów
     n_segments = (nsamp - seg) // step + 1
     if max_segments is not None:
         n_segments = min(n_segments, max_segments)
@@ -51,13 +43,12 @@ def compute_psd_iq_uint8(path, fs, nfft=131072, overlap=0.5, max_segments=None):
     Pxx_acc = None
     for k in range(n_segments):
         i0 = k * step
-        b0 = 2 * i0           # bajt startu (bo I/Q)
-        b1 = 2 * (i0 + seg)   # bajt końca segmentu
+        b0 = 2 * i0  
+        b1 = 2 * (i0 + seg)
         block_u8 = np.asarray(mm[b0:b1], dtype=np.float32) - 128.0
-        # rozdziel I/Q
         I = block_u8[0::2]; Q = block_u8[1::2]
         x = (I + 1j*Q)
-        x = x - np.mean(x)         # usuń DC w segmencie
+        x = x - np.mean(x)
         xw = x * win
         X = np.fft.fft(xw, n=seg)
         Pxx = (np.abs(X)**2) / win_power
@@ -84,16 +75,12 @@ def main():
     ap.add_argument("--title", type=str, default=None, help="Tytuł wykresu (opcjonalnie).")
     args = ap.parse_args()
 
-    # Liczenie PSD
     Pxx, nseg = compute_psd_iq_uint8(args.input, args.fs, args.nfft, args.overlap, args.max_segments)
-    # Przesunięcie do -Fs/2..+Fs/2
     Pxx = np.fft.fftshift(Pxx)
     f = np.fft.fftshift(np.fft.fftfreq(args.nfft, d=1.0/args.fs))
 
-    # dB
     Pxx_dB = 10.0 * np.log10(Pxx + 1e-20)
 
-    # Rysunek
     plt.figure(figsize=(11, 5))
     plt.plot(f, Pxx_dB, linewidth=0.9)
     plt.xlabel("Częstotliwość [Hz] (baseband)")

@@ -94,8 +94,6 @@ class MainWindow(QMainWindow):
                 'sample_rate': 2.048
             }
         }
-        
-        # Ustaw początkowy komunikat dla domyślnego systemu GPS
         self.update_satellite_system_display()
         
     def update_satellite_system_display(self):
@@ -450,8 +448,6 @@ class MainWindow(QMainWindow):
         self.analyze_btn = QPushButton("🔍 Rozpocznij Analizę")
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.analyze_btn.setStyleSheet(action_button_style)
-        
-        # Przycisk Stop z niestandardowym stylem
         stop_button_style = """
         QPushButton {
             background-color: #e74c3c;
@@ -481,7 +477,7 @@ class MainWindow(QMainWindow):
         
         self.stop_btn = QPushButton("⏹️ Stop")
         self.stop_btn.clicked.connect(self.stop_analysis)
-        self.stop_btn.setEnabled(False)  # Domyślnie wyłączony
+        self.stop_btn.setEnabled(False)
         self.stop_btn.setStyleSheet(stop_button_style)
         
         self.progress_bar = QProgressBar()
@@ -509,8 +505,6 @@ class MainWindow(QMainWindow):
         action_group = QGroupBox("Działania")
         action_group.setStyleSheet(group_style)
         action_layout = QVBoxLayout(action_group)
-        
-        # Horizontal layout dla przycisków Start/Stop
         buttons_layout = QHBoxLayout()
         buttons_layout.addWidget(self.analyze_btn)
         buttons_layout.addWidget(self.stop_btn)
@@ -583,12 +577,10 @@ class MainWindow(QMainWindow):
         self.update_layout_proportions()
         
     def change_map_layer(self, layer_type):
-        # Odznacz wszystkie przyciski map
         self.osm_btn.setChecked(False)
         self.satellite_btn.setChecked(False)
         self.topo_btn.setChecked(False)
         
-        # Zaznacz aktywny przycisk
         if layer_type == 'osm':
             self.osm_btn.setChecked(True)
         elif layer_type == 'satellite':
@@ -613,14 +605,12 @@ class MainWindow(QMainWindow):
             self.galileo_btn.setChecked(True)
             self.selected_satellite_system = 'Galileo'
         
-        # Aktualizuj parametry analizy w ustawieniach
         params = self.satellite_params[self.selected_satellite_system]
         self.current_settings['analysis_params']['frequency'] = params['frequency']
         self.current_settings['analysis_params']['sample_rate'] = params['sample_rate']
         
         print(f"Wybrany system satelitarny: {self.selected_satellite_system}")
         
-        # Wyświetl szczegółowy komunikat w panelu wyników
         self.update_satellite_system_display()
     
     def open_settings(self):
@@ -689,7 +679,17 @@ class MainWindow(QMainWindow):
         self.clear_markers_silently()
         self.jammer_shown = False
         self.analyze_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)  # Włącz przycisk Stop
+        self.browse_btn.setEnabled(False)
+        self.settings_btn.setEnabled(False)
+        self.run_simulation_btn.setEnabled(False)
+        self.gps_btn.setEnabled(False)
+        self.glonass_btn.setEnabled(False)
+        self.galileo_btn.setEnabled(False)
+        self.osm_btn.setEnabled(False)
+        self.satellite_btn.setEnabled(False)
+        self.topo_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n🛰️ System satelitarny: {self.selected_satellite_system}\n")
@@ -784,7 +784,6 @@ class MainWindow(QMainWindow):
             """
             self.web_view.page().runJavaScript(js_add_jammer)
             if hasattr(self, 'current_files') and len(self.current_files) >= 2:
-                # Pozycje anten względem punktu referencyjnego (w metrach) - pobierz z ustawień
                 settings_positions = self.current_settings.get('antenna_positions', {})
                 antenna_positions = [
                     settings_positions.get('antenna1', [0.0, 0.0]),
@@ -823,7 +822,6 @@ class MainWindow(QMainWindow):
             scrollbar = self.results_text.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
         else:
-            # gdy błąd triangulacji
             error_text = f"\n TRIANGULACJA NIEUDANA: {result['message']}"
             current_text = self.results_text.toPlainText()
             self.results_text.setPlainText(current_text + error_text)
@@ -832,42 +830,59 @@ class MainWindow(QMainWindow):
         """Zatrzymuje trwającą analizę"""
         if self.analysis_thread and self.analysis_thread.isRunning():
             self.results_text.append("\n⏹️ Zatrzymywanie analizy...")
-            
-            # Ustaw flagę stop dla wątków w tle (triangulacja, jamming)
             self.analysis_thread.stop_requested = True
-            
-            # Przerwij główny wątek QThread
             self.analysis_thread.terminate()
-            self.analysis_thread.wait(3000)  # Czekaj max 3 sekundy
-            
-            # Wyłącz serwer HTTP jeśli istnieje
+            self.analysis_thread.wait(3000)
             if hasattr(self.analysis_thread, 'shutdown_server'):
                 self.analysis_thread.shutdown_server()
             
             self.results_text.append("✅ Analiza została zatrzymana.")
-            
-            # Przywróć stan UI
             self.analyze_btn.setEnabled(True)
+            self.browse_btn.setEnabled(True)
+            self.settings_btn.setEnabled(True)
+            self.run_simulation_btn.setEnabled(True)
+            self.gps_btn.setEnabled(True)
+            self.glonass_btn.setEnabled(True)
+            self.galileo_btn.setEnabled(True)
+            self.osm_btn.setEnabled(True)
+            self.satellite_btn.setEnabled(True)
+            self.topo_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
+            
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("Analiza przerwana")
     
     def on_analysis_thread_finished(self):
-        """Wywoływane gdy wątek analizy się zakończy (normalnie lub przez terminate)"""
         self.analyze_btn.setEnabled(True)
+        self.browse_btn.setEnabled(True)
+        self.settings_btn.setEnabled(True)
+        self.run_simulation_btn.setEnabled(True)
+        self.gps_btn.setEnabled(True)
+        self.glonass_btn.setEnabled(True)
+        self.galileo_btn.setEnabled(True)
+        self.osm_btn.setEnabled(True)
+        self.satellite_btn.setEnabled(True)
+        self.topo_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
 
     def analysis_finished(self, points):
         self.analyze_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)  # Wyłącz przycisk Stop
+        self.browse_btn.setEnabled(True)
+        self.settings_btn.setEnabled(True)
+        self.run_simulation_btn.setEnabled(True)
+        self.gps_btn.setEnabled(True)
+        self.glonass_btn.setEnabled(True)
+        self.galileo_btn.setEnabled(True)
+        self.osm_btn.setEnabled(True)
+        self.satellite_btn.setEnabled(True)
+        self.topo_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
 
         if points and len(points) > 0:
-            # Sprawdź czy to wyniki jammingu czy brak jammingu
             first_result = points[0]
             
             if first_result.get('type') == 'jamming':
-                # Wyświetl wszystkie okresy jammingu
-                jamming_text = f"🔴 Wykryto {len(points)} okres(ów) jammingu:\n\n"
+                jamming_text = f"Wykryto {len(points)} okres(ów) jammingu:\n\n"
                 
                 for result in points:
                     event_num = result.get('event_number', '?')
@@ -876,16 +891,10 @@ class MainWindow(QMainWindow):
                     duration = result.get('duration', 0)
                     
                     jamming_text += f"Zdarzenie {event_num}:\n"
-                    jamming_text += f"  Próbki: {start_sample} - {end_sample}\n"
-                    jamming_text += f"  Długość: {duration} próbek\n"
-                    
-                    # Przelicz na czas jeśli znamy częstotliwość próbkowania (2.048 MHz)
                     duration_ms = (duration / 2048000) * 1000
                     jamming_text += f"  Czas: {duration_ms:.2f} ms\n\n"
-                
                 self.results_text.setPlainText(jamming_text)
                 
-                # Triangulacja tylko dla pierwszego zdarzenia
                 triangulation = first_result.get('triangulation')
                 if triangulation:
                     self.display_final_triangulation_result(triangulation)
