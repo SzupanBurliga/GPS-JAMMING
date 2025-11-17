@@ -68,7 +68,7 @@ class GPSAnalysisThread(QThread):
     jamming_analysis_complete = Signal(list) 
     triangulation_complete = Signal(dict)
 
-    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None, satellite_system='GPS'):
+    def __init__(self, file_paths, power_threshold=120.0, antenna_positions=None, satellite_system='GPS', hold_position=False):
         super().__init__()
         self.file_paths = file_paths
         self.power_threshold = power_threshold
@@ -88,6 +88,8 @@ class GPSAnalysisThread(QThread):
             self.gnss_system_flag = '-l'
         else:
             self.gnss_system_flag = '-g'  # domyślnie GPS
+        
+        self.hold_position = hold_position
         
         print(f"[WORKER INIT] Utworzono GPSAnalysisThread z pozycjami anten:")
         print(f"[WORKER INIT]   Antena 1: {self.antenna_positions['antenna1']}")
@@ -658,7 +660,13 @@ class GPSAnalysisThread(QThread):
         try:
             print(f"[WORKER] Uruchamianie analizy {self.gnssdec_path}...")
             print(f"[WORKER] System satelitarny: {self.satellite_system} (flaga: {self.gnss_system_flag})")
-            gnssdec_command = [self.gnssdec_path, self.gnss_system_flag ,file1]
+            print(f"[WORKER] Utrzymuj pozycję: {self.hold_position}")
+            
+            gnssdec_command = [self.gnssdec_path, self.gnss_system_flag]
+            if self.hold_position:
+                gnssdec_command.append('-h')
+            gnssdec_command.append(file1)
+            
             result = subprocess.run(gnssdec_command, check=True, capture_output=True, text=True)
             print(f"[WORKER] Analiza {self.gnssdec_path} zakończona.")
             

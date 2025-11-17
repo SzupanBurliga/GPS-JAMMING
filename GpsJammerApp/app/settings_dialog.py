@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, 
                              QLabel, QDoubleSpinBox, QSpinBox, 
-                             QPushButton, QGroupBox, QGridLayout, QMessageBox)
+                             QPushButton, QGroupBox, QGridLayout, QMessageBox, QCheckBox)
 from PySide6.QtCore import Qt
 import os
 
@@ -117,6 +117,34 @@ class SettingsDialog(QDialog):
         self.threshold.setStyleSheet(self.get_spinbox_style())
         analysis_layout.addWidget(self.threshold, 2, 1)
         
+        analysis_layout.addWidget(QLabel("Utrzymuj pozycję:"), 3, 0)
+        self.hold_position_checkbox = QCheckBox()
+        self.hold_position_checkbox.setChecked(False)
+        self.hold_position_checkbox.setStyleSheet("""
+        QCheckBox {
+            font-size: 13px;
+            color: #2c3e50;
+        }
+        QCheckBox::indicator {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #bdc3c7;
+            border-radius: 5px;
+            background-color: white;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #3498db;
+            border-color: #3498db;
+            image: url(none);
+        }
+        QCheckBox::indicator:checked:after {
+            content: "✓";
+            color: white;
+            font-weight: bold;
+        }
+        """)
+        analysis_layout.addWidget(self.hold_position_checkbox, 3, 1)
+        
         self.calibrate_btn = QPushButton("Oblicz próg")
         self.calibrate_btn.clicked.connect(self.on_calibrate_clicked)
         self.calibrate_btn.setStyleSheet("""
@@ -138,7 +166,7 @@ class SettingsDialog(QDialog):
             background-color: #21618c;
         }
         """)
-        analysis_layout.addWidget(self.calibrate_btn, 3, 0, 1, 2)
+        analysis_layout.addWidget(self.calibrate_btn, 4, 0, 1, 2)
         
         layout.addWidget(analysis_group)
         
@@ -194,7 +222,6 @@ class SettingsDialog(QDialog):
         layout.addLayout(button_layout)
     
     def on_calibrate_clicked(self):
-        """Obsługa kliknięcia przycisku Kalibruj."""
         if self.num_files == 0:
             QMessageBox.warning(self, "Brak plików", "Brak plików do kalibracji")
         elif self.num_files >= 1:
@@ -320,7 +347,6 @@ class SettingsDialog(QDialog):
         distance_13 = calculate_distance(antenna_positions['antenna1'], antenna_positions['antenna3'])
         distance_23 = calculate_distance(antenna_positions['antenna2'], antenna_positions['antenna3'])
         
-        # Pobierz wartości z etykiet (usuwając " MHz")
         frequency_text = self.frequency_label.text().replace(' MHz', '')
         sample_rate_text = self.sample_rate_label.text().replace(' MHz', '')
         
@@ -334,7 +360,8 @@ class SettingsDialog(QDialog):
             'analysis_params': {
                 'frequency': float(frequency_text),
                 'threshold': int(self.threshold.value()),
-                'sample_rate': float(sample_rate_text)
+                'sample_rate': float(sample_rate_text),
+                'hold_position': self.hold_position_checkbox.isChecked()
             }
         }
     
@@ -353,6 +380,9 @@ class SettingsDialog(QDialog):
             params = settings['analysis_params']
             threshold_value = params.get('threshold', 30)
             self.threshold.setValue(float(threshold_value))
+            
+            hold_position = params.get('hold_position', False)
+            self.hold_position_checkbox.setChecked(hold_position)
             
             frequency = params.get('frequency', 1575.42)
             sample_rate = params.get('sample_rate', 2.048)

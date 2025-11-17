@@ -97,7 +97,6 @@ class MainWindow(QMainWindow):
         self.update_satellite_system_display()
         
     def update_satellite_system_display(self):
-        """Aktualizuje wyświetlanie informacji o wybranym systemie satelitarnym."""
         params = self.satellite_params[self.selected_satellite_system]
         message = (
             f"🛰️ Wybrano system satelitarny: {self.selected_satellite_system}\n"
@@ -362,29 +361,16 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(12)
 
-        map_group = QGroupBox("Typ Mapy")
-        map_group.setStyleSheet(group_style)
-        map_layout = QHBoxLayout(map_group) 
+        recording_group = QGroupBox("Nagrywanie SDR")
+        recording_group.setStyleSheet(group_style)
+        recording_layout = QVBoxLayout(recording_group)
         
-        self.osm_btn = QPushButton("🗺️ OSM")
-        self.osm_btn.setCheckable(True)
-        self.osm_btn.setChecked(True)
-        self.osm_btn.clicked.connect(lambda: self.change_map_layer('osm'))
-        self.osm_btn.setStyleSheet(osm_button_style)
-        map_layout.addWidget(self.osm_btn)
+        self.record_btn = QPushButton("Nagraj pliki")
+        self.record_btn.clicked.connect(self.open_recording_panel)
+        self.record_btn.setStyleSheet(button_style)
+        recording_layout.addWidget(self.record_btn)
         
-        self.satellite_btn = QPushButton("🛰️ Satelita")
-        self.satellite_btn.setCheckable(True)
-        self.satellite_btn.clicked.connect(lambda: self.change_map_layer('satellite'))
-        self.satellite_btn.setStyleSheet(satellite_button_style)
-        map_layout.addWidget(self.satellite_btn)
-        
-        self.topo_btn = QPushButton("🏔️ Topo")
-        self.topo_btn.setCheckable(True)
-        self.topo_btn.clicked.connect(lambda: self.change_map_layer('topo'))
-        self.topo_btn.setStyleSheet(topo_button_style)
-        map_layout.addWidget(self.topo_btn)
-        layout.addWidget(map_group)
+        layout.addWidget(recording_group)
 
         satellite_system_group = QGroupBox("System Satelitarny")
         satellite_system_group.setStyleSheet(group_style)
@@ -575,20 +561,15 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.update_layout_proportions()
-        
-    def change_map_layer(self, layer_type):
-        self.osm_btn.setChecked(False)
-        self.satellite_btn.setChecked(False)
-        self.topo_btn.setChecked(False)
-        
-        if layer_type == 'osm':
-            self.osm_btn.setChecked(True)
-        elif layer_type == 'satellite':
-            self.satellite_btn.setChecked(True)
-        elif layer_type == 'topo':
-            self.topo_btn.setChecked(True)
-        
-        self.web_view.page().runJavaScript(f"changeMapLayer('{layer_type}');")
+    
+    def open_recording_panel(self):
+        """Otwiera panel nagrywania SDR"""
+        try:
+            from .recording_dialog import RecordingDialog
+            dialog = RecordingDialog(self)
+            dialog.exec()
+        except ImportError as e:
+            self.results_text.setPlainText(f"Błąd importu okna nagrywania: {e}")
     
     def select_satellite_system(self, system):
         self.gps_btn.setChecked(False)
@@ -629,6 +610,7 @@ class MainWindow(QMainWindow):
 
                 positions = settings['antenna_positions']
                 distances = settings['antenna_distances']
+                hold_position_status = "✅ WŁĄCZONE" if settings['analysis_params'].get('hold_position', False) else "❌ WYŁĄCZONE"
                 
                 info_text = (
                     f"⚙️ USTAWIENIA ZAKTUALIZOWANE:\n"
@@ -636,7 +618,8 @@ class MainWindow(QMainWindow):
                     f"   Antena 1: (0.0, 0.0) m [ref]\n"
                     f"   Antena 2: ({positions['antenna2'][0]:.3f}, {positions['antenna2'][1]:.3f}) m\n"
                     f"   Antena 3: ({positions['antenna3'][0]:.3f}, {positions['antenna3'][1]:.3f}) m\n"
-                    f"Parametry: {settings['analysis_params']['frequency']:.2f} MHz, próg {settings['analysis_params']['threshold']}"
+                    f"Parametry: {settings['analysis_params']['frequency']:.2f} MHz, próg {settings['analysis_params']['threshold']}\n"
+                    f"📍 Utrzymuj pozycję: {hold_position_status}"
                 )
                 
                 self.results_text.setPlainText(info_text)
@@ -682,22 +665,28 @@ class MainWindow(QMainWindow):
         self.browse_btn.setEnabled(False)
         self.settings_btn.setEnabled(False)
         self.run_simulation_btn.setEnabled(False)
+        self.record_btn.setEnabled(False)
         self.gps_btn.setEnabled(False)
         self.glonass_btn.setEnabled(False)
         self.galileo_btn.setEnabled(False)
-        self.osm_btn.setEnabled(False)
-        self.satellite_btn.setEnabled(False)
-        self.topo_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        self.results_text.setPlainText(f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n🛰️ System satelitarny: {self.selected_satellite_system}\n")
+        
+        hold_position_status = "✅ WŁĄCZONE" if self.current_settings['analysis_params'].get('hold_position', False) else "❌ WYŁĄCZONE"
+        self.results_text.setPlainText(
+            f"Rozpoczynam analizę {len(self.current_files)} plik(ów)...\n"
+            f"🛰️ System satelitarny: {self.selected_satellite_system}\n"
+            f"📍 Utrzymuj pozycję: {hold_position_status}\n"
+        )
+        
         self.analysis_thread = GPSAnalysisThread(
             self.current_files, 
             power_threshold=self.current_settings['analysis_params'].get('threshold', 120.0),
             antenna_positions=self.current_settings.get('antenna_positions'),
-            satellite_system=self.selected_satellite_system
+            satellite_system=self.selected_satellite_system,
+            hold_position=self.current_settings['analysis_params'].get('hold_position', False)
         )
         self.analysis_thread.progress_update.connect(self.update_progress)
         self.analysis_thread.analysis_complete.connect(self.analysis_finished)
@@ -841,12 +830,10 @@ class MainWindow(QMainWindow):
             self.browse_btn.setEnabled(True)
             self.settings_btn.setEnabled(True)
             self.run_simulation_btn.setEnabled(True)
+            self.record_btn.setEnabled(True)
             self.gps_btn.setEnabled(True)
             self.glonass_btn.setEnabled(True)
             self.galileo_btn.setEnabled(True)
-            self.osm_btn.setEnabled(True)
-            self.satellite_btn.setEnabled(True)
-            self.topo_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
             
             self.progress_bar.setValue(0)
@@ -857,12 +844,10 @@ class MainWindow(QMainWindow):
         self.browse_btn.setEnabled(True)
         self.settings_btn.setEnabled(True)
         self.run_simulation_btn.setEnabled(True)
+        self.record_btn.setEnabled(True)
         self.gps_btn.setEnabled(True)
         self.glonass_btn.setEnabled(True)
         self.galileo_btn.setEnabled(True)
-        self.osm_btn.setEnabled(True)
-        self.satellite_btn.setEnabled(True)
-        self.topo_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
 
     def analysis_finished(self, points):
@@ -870,12 +855,10 @@ class MainWindow(QMainWindow):
         self.browse_btn.setEnabled(True)
         self.settings_btn.setEnabled(True)
         self.run_simulation_btn.setEnabled(True)
+        self.record_btn.setEnabled(True)
         self.gps_btn.setEnabled(True)
         self.glonass_btn.setEnabled(True)
         self.galileo_btn.setEnabled(True)
-        self.osm_btn.setEnabled(True)
-        self.satellite_btn.setEnabled(True)
-        self.topo_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
 
         if points and len(points) > 0:
