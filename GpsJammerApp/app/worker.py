@@ -658,7 +658,7 @@ class GPSAnalysisThread(QThread):
         try:
             print(f"[WORKER] Uruchamianie analizy {self.gnssdec_path}...")
             print(f"[WORKER] System satelitarny: {self.satellite_system} (flaga: {self.gnss_system_flag})")
-            gnssdec_command = [self.gnssdec_path, self.gnss_system_flag, file1]
+            gnssdec_command = [self.gnssdec_path, self.gnss_system_flag ,file1]
             result = subprocess.run(gnssdec_command, check=True, capture_output=True, text=True)
             print(f"[WORKER] Analiza {self.gnssdec_path} zakończona.")
             
