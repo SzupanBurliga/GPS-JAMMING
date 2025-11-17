@@ -1,6 +1,4 @@
-do zrobienia: (ASAP)
-- dodać przycisk do włączania/wyłączania flagi hold w ./gnssdec
-
+do zrobienia: (ASAP) ~ Szymon
 Plan 200%
 - dodać generowanie sygnałów Galileo, Glonass w symulacjach
 - poprawić algorytm do wykrywania jammingu
