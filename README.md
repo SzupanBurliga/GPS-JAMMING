@@ -52,6 +52,19 @@ make
 cd ../..
 ```
 
+### 6. (Opcjonalnie) Instalacja sterowników do RTL_SDR Blog v4
+```bash
+git clone https://github.com/rtlsdrblog/rtl-sdr-blog
+cd rtl-sdr-blog
+mkdir build
+cd build
+cmake ../ -DINSTALL_UDEV_RULES=ON
+make
+sudo make install
+sudo cp ../rtl-sdr.rules /etc/udev/rules.d/
+sudo ldconfig
+```
+
 ## Uruchomienie
 
 ### Główna aplikacja GUI
@@ -86,8 +99,7 @@ python simulate/frontend/gnss_frontend.py
 - Mapa interaktywna (Leaflet + OpenStreetMap)
 - Marker pozycji jammera (JAM)
 - Czerwone okręgi zasięgu od każdej anteny
-- Panel wyników z danymi w czasie rzeczywistym (40% szerokości)
-- Mapa zajmuje 60% szerokości okna
+- Panel wyników z danymi w czasie "rzeczywistym"
 - Zoom na pozycję jammera po triangulacji
 
 ### Nagrywanie sygnałów
@@ -116,6 +128,13 @@ python simulate/frontend/gnss_frontend.py
    - Wyświetla pozycję jammera na mapie
 
 ### Przykład 2: Kalibracja progu detekcji
+1. W aplikacji dodaj pliki, które chcesz badać
+2. Kliknij przycisk "Ustawienia"
+3. Kliknij przycisk "Oblicz próg" oraz poczekaj, aż obliczy względny przycisk detekcji
+4. Zapisz ustawienia
+
+#### lub
+
 ```bash
 python GpsJammerApp/app/checkIfJamming.py nagranie.bin --kalibruj
 # Zwraca sugerowany próg mocy dla tego pliku
@@ -126,9 +145,17 @@ python GpsJammerApp/app/checkIfJamming.py nagranie.bin --kalibruj
 2. W aplikacji kliknij "Nagraj pliki"
 3. Skonfiguruj parametry (częstotliwość, gain, czas nagrywania)
 4. Opcjonalnie włącz BiasT dla aktywnej anteny
+5. Nagrzej RTL-SDR, aby zniwelować błędy pomiarowe (ok. 60s)
 5. Kliknij "Start Recording"
 
 ### Przykład 4: Generowanie testowych danych
+1. W aplikacji nacisnij "Wygeneruj pliki symulacyjne"
+2. Wybierz odpowiednie parametry (nazwa, czas trwania, szerokość, długośc oraz wysokosć geograficzna)
+3. Zaznacz czy plik ma być ruchomy oraz odpowiedni tryb i tam również wpisz odpowiednie parametry.
+4. Nacisnij start oraz poczekaj na to, aż aplikacja poinformuje o zakończeniu generowania plików.
+
+#### lub
+
 ```bash
 python simulate/frontend/gnss_frontend.py
 # Wybierz tryb "Jammer", ustaw parametry i wygeneruj plik
@@ -251,7 +278,7 @@ sudo apt install build-essential libfftw3-dev
 ### Problemy z RTL-SDR
 ```bash
 # Instalacja narzędzi RTL-SDR:
-sudo apt install rtl-sdr
+Spójrz na punkt Nr.6 na samej górze READ.me
 
 # Test urządzenia:
 rtl_test
@@ -278,11 +305,12 @@ Podczas analizy:
 [5.2, 50.061430, 19.936580, 122880000]
 [6.1, 50.061435, 19.936582, 163840000]
 [7.3, 50.061440, 19.936585, 204800000]
+[czas trwania analizy, szerokość geograficzna, długość geograficzna, nr. próbki z bufforu]
 ```
 
 Po zakończeniu:
 ```
-Znaleziono jamming [122880000, 163840000]
+Znaleziono jamming [122880000, 163840000] - wskazuje okresy, gdzie wystąpiło prawodpodobieństwo jammingu
 
 📍 TRIANGULACJA ZAKOŃCZONA:
   🎯 Pozycja jammera: 49.99999726°N, 19.90371989°E
@@ -346,6 +374,7 @@ Projekt dyplomowy - 2024
 ## Licencja
 
 - **Backend C (gnssdec)**: GNU GPL v2 (Copyright 2014 Taro Suzuki)
+- **Generowanie czystych próbek GPS** - The MIT License (MIT) Copyright (c) 2015-2025 Takuji Ebinuma
 - **Reszta projektu**: Do uzgodnienia
 
 ## Kontakt i wsparcie
@@ -361,4 +390,4 @@ W razie problemów sprawdź:
 - Działa tylko na Linux
 - Wymaga połączenia internetowego (mapa)
 - Triangulacja TDOA wymaga precyzyjnej synchronizacji czasowej
-- Symulacje wymagają zewnętrznych plików efemeryd
+- Symulacje wymagają zewnętrznych plików efemeryd (można je pobrać ze strony nasa)
