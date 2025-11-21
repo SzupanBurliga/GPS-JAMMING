@@ -31,7 +31,8 @@ pip install -r requirements.txt
 
 ### 4. Kompilacja backendu HTTP C
 ```bash
-cd GpsJammerApp/backendhttp
+cd GpsJammerApp/backend/bin
+make clean
 make
 cd ../..
 ```
