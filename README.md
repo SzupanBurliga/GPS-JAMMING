@@ -29,7 +29,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Kompilacja backendu HTTP C
+### 4. Kompilacja backendu
 ```bash
 cd GpsJammerApp/backend/bin
 make clean
