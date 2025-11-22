@@ -79,7 +79,7 @@ python simulate/frontend/gnss_frontend.py
 - Panel nagrywania RTL-SDR w [`GpsJammerApp/app/recording_dialog.RecordingDialog`](GpsJammerApp/app/recording_dialog.py)
 - Triangulacja RSSI oparta o [`skrypty/triangulateRSSI.triangulate_jammer_location`](skrypty/triangulateRSSI.py)
 - Generator danych testowych w [`simulate/frontend/gnss_frontend.py`](simulate/frontend/gnss_frontend.py)
-- Backend DSP w C: [`GpsJammerApp/backendhttp/bin/gnssdec`](GpsJammerApp/backendhttp/bin/gnssdec)
+- Backend DSP w C: [`GpsJammerApp/backend/bin/gnssdec`](GpsJammerApp/backendhttp/bin/gnssdec)
 
 ## Jak pracować z systemem
 
@@ -104,14 +104,14 @@ python simulate/frontend/gnss_frontend.py
 
 - **PySide6**: przeinstaluj wersję 6.5.2 wraz z QtWebEngine.
 - **Mapa**: sprawdź dostęp do Internetu i obecność `map_template.html`.
-- **Backend C**: po zmianach uruchom `make clean && make` w [`GpsJammerApp/backendhttp`](GpsJammerApp/backendhttp).
+- **Backend C**: po zmianach uruchom `make clean && make` w [`GpsJammerApp/backend`](GpsJammerApp/backendhttp).
 - **Triangulacja**: wymagane min. 2 pliki oraz poprawne ustawienie anten.
 - **RTL-SDR**: upewnij się, że `rtl_test` działa i użytkownik jest w grupie `plugdev`.
 
 ## Struktura projektu (skrót)
 
 - [`GpsJammerApp/app`](GpsJammerApp/app) – logika GUI, wykrywanie, triangulacja
-- [`GpsJammerApp/backendhttp`](GpsJammerApp/backendhttp) – program `gnssdec` w C
+- [`GpsJammerApp/backend`](GpsJammerApp/backendhttp) – program `gnssdec` w C
 - [`simulate/frontend`](simulate/frontend) – generowanie próbek i symulacje
 - [`skrypty`](skrypty) – narzędzia CLI (RSSI, TDOA, widmo)
 - [`requirements.txt`](requirements.txt) – zależności Pythona
