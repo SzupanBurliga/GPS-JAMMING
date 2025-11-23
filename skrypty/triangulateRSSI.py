@@ -1,18 +1,30 @@
 import numpy as np
 import math
 
+# ==============================================================================
+#   KONFIGURACJA I STAŁE
+# ==============================================================================
+
 # PARAMETRY KALIBRACYJNE (domyślne)
 DEFAULT_CALIBRATED_TX_POWER = 40.0
 DEFAULT_CALIBRATED_PATH_LOSS_EXPONENT = 3.0
 DEFAULT_SIGNAL_FREQUENCY_MHZ = 1575.42
 DEFAULT_SIGNAL_THRESHOLD = 0.1
 
+# PARAMETRY PRZESZUKIWANIA SIATKI (GRID SEARCH)
+GRID_DENSITY = 300          # Rozdzielczość siatki (im więcej, tym precyzyjniej, ale wolniej)
+SEARCH_RANGE_MULTIPLIER = 1.5
+
 # Stałe do konwersji metrów na stopnie/minuty geograficzne
 METERS_PER_DEGREE_LAT = 111320.0
 METERS_PER_DEGREE_LON = 111320.0 
 
-#Wczytywanie i przetwarzanie IQ w uint8 z pliku
+# ==============================================================================
+#   FUNKCJE POMOCNICZE (IQ, Konwersja, Dystans)
+# ==============================================================================
+
 def read_iq_data(filename):
+  ##Wczytywanie i przetwarzanie IQ w uint8 z pliku  
     try:
         raw_data = np.fromfile(filename, dtype=np.uint8)
         float_data = (raw_data.astype(np.float32) - 127.5) / 127.5
@@ -22,14 +34,13 @@ def read_iq_data(filename):
         print(f"BŁĄD: Plik '{filename}' nie został znaleziony.")
         return None
 
-#Znajdowanie pierwszego indeksu przekraczajacego próg
 def find_change_point(amplitude_data, threshold):
+  ##Znajdowanie pierwszego indeksu przekraczającego próg 
     change_indices = np.where(amplitude_data > threshold)[0]
     return change_indices[0] if len(change_indices) > 0 else None
 
-# Konwersja metrów na stopnie geograficzne
 def meters_to_geographic_degrees(meters_x, meters_y, reference_lat=50.0):
-
+  ##Konwersja przesunięcia w metrach na stopnie geograficzne 
     delta_lat_degrees = meters_y / METERS_PER_DEGREE_LAT
 
     meters_per_degree_lon = METERS_PER_DEGREE_LON * math.cos(math.radians(reference_lat))
@@ -46,6 +57,7 @@ def calculate_distance_from_file(iq_filename,
                                frequency_mhz=DEFAULT_SIGNAL_FREQUENCY_MHZ,
                                threshold=DEFAULT_SIGNAL_THRESHOLD,
                                verbose=True):
+  ##Obliczanie odległości na podstawie pliku z danymi IQ 
     if verbose:
         print(f"  Analizowanie pliku '{iq_filename}'  ")
     iq_samples = read_iq_data(iq_filename)
@@ -69,48 +81,47 @@ def calculate_distance_from_file(iq_filename,
             print(f"Nie wykryto sygnału z progiem {threshold}.\n")
         return None
 
-def find_circle_intersections(p0, r0, p1, r1):
-    d = np.linalg.norm(p1 - p0)
-    if d > r0 + r1 or d < abs(r0 - r1) or d == 0:
-        return None
+# ==============================================================================
+#   ALGORYTM GRID SEARCH (Zastępuje metody geometryczne)
+# ==============================================================================
+
+def perform_grid_search(positions, radii):
+  ##Znajduje punkt najlepiej pasujący do zestawu odległości od anten metodą Grid Search. Minimalizuje błąd bezwzględny sumy różnic odległości.
+    # Konwersja na numpy array dla pewności
+    positions = np.array(positions)
+    radii = np.array(radii)
     
-    a = (r0**2 - r1**2 + d**2) / (2 * d)
-    if r0**2 < a**2:
-        return None # 
+    print(f"Uruchamianie przeszukiwania siatki {GRID_DENSITY}x{GRID_DENSITY}...")
+    
+    max_radius = np.max(radii)
+    # Środek obszaru poszukiwań to średnia pozycja anten
+    center = np.mean(positions, axis=0)
+    
+    search_range = max_radius * SEARCH_RANGE_MULTIPLIER
+    
+    # Tworzenie siatki punktów
+    x_coords = np.linspace(center[0] - search_range, center[0] + search_range, GRID_DENSITY)
+    y_coords = np.linspace(center[1] - search_range, center[1] + search_range, GRID_DENSITY)
+    grid_x, grid_y = np.meshgrid(x_coords, y_coords)
+    
+    # Obliczanie macierzy błędu dla każdego punktu siatki
+    total_error = np.zeros_like(grid_x)
+    
+    for pos, r in zip(positions, radii):
+        # Odległość każdego punktu siatki od danej anteny
+        dist_to_pos = np.sqrt((grid_x - pos[0])**2 + (grid_y - pos[1])**2)
+        # Dodajemy błąd (różnica między odległością z siatki a zmierzoną RSSI)
+        total_error += np.abs(dist_to_pos - r)
+    
+    # Znalezienie indeksu punktu z najmniejszym błędem
+    min_error_idx = np.unravel_index(np.argmin(total_error), total_error.shape)
+    best_location = np.array([grid_x[min_error_idx], grid_y[min_error_idx]])
+    
+    return best_location
 
-    h = math.sqrt(r0**2 - a**2)
-    p2 = p0 + a * (p1 - p0) / d
-    x1 = p2[0] + h * (p1[1] - p0[1]) / d
-    y1 = p2[1] - h * (p1[0] - p0[0]) / d
-    x2 = p2[0] - h * (p1[1] - p0[1]) / d
-    y2 = p2[1] + h * (p1[0] - p0[0]) / d
-    return [np.array([x1, y1]), np.array([x2, y2])]
-
-def find_best_estimate_no_intersection(p0, r0, p1, r1):
-    d = np.linalg.norm(p1 - p0)
-    if d == 0: return None
-    unit_vector = (p1 - p0) / d
-    point_on_0 = p0 + r0 * unit_vector
-    point_on_1 = p1 - r1 * unit_vector
-    best_estimate = (point_on_0 + point_on_1) / 2
-    return best_estimate
-
-#   FUNKCJA OBLICZENIOWA DLA 3 ANTEN  
-def trilaterate(p0, r0, p1, r1, p2, r2):
-    x0, y0 = p0; x1, y1 = p1; x2, y2 = p2
-    A = 2 * (x1 - x0)
-    B = 2 * (y1 - y0)
-    C = r0**2 - r1**2 - x0**2 + x1**2 - y0**2 + y1**2
-    D = 2 * (x2 - x1)
-    E = 2 * (y2 - y1)
-    F = r1**2 - r2**2 - x1**2 + x2**2 - y1**2 + y2**2
-    determinant = A * E - B * D
-    if abs(determinant) < 1e-9:
-        print("BŁĄD: Anteny są współliniowe. Nie można jednoznacznie określić lokalizacji.")
-        return None
-    x = (C * E - F * B) / determinant
-    y = (A * F - D * C) / determinant
-    return np.array([x, y])
+# ==============================================================================
+#   GŁÓWNA FUNKCJA LOGIKI BIZNESOWEJ
+# ==============================================================================
 
 def triangulate_jammer_location(file_paths, 
                               antenna_positions_meters=None,
@@ -121,14 +132,14 @@ def triangulate_jammer_location(file_paths,
                               frequency_mhz=DEFAULT_SIGNAL_FREQUENCY_MHZ,
                               threshold=DEFAULT_SIGNAL_THRESHOLD,
                               verbose=False):
-
-    if len(file_paths) < 2 or len(file_paths) > 3:
+  ## Główna funkcja określająca lokalizację jammera. Teraz używa metody Grid Search zamiast prostych przecięć geometrycznych.
+    if len(file_paths) < 2:
         return {
             'success': False,
             'distances': None,
             'location_meters': None,
             'location_geographic': None,
-            'message': 'Wymagane są 2 lub 3 pliki antenna',
+            'message': 'Wymagane są co najmniej 2 pliki z danymi anten.',
             'num_antennas': len(file_paths)
         }
     
@@ -136,192 +147,121 @@ def triangulate_jammer_location(file_paths,
     if antenna_positions_meters is None:
         antenna_positions_meters = [
             np.array([0.0, 0.0]),      # Antena 0 - punkt odniesienia
-            np.array([0.5, 0.0]),      # Antena 1 - 0.5m na wschód
-            np.array([0.0, 0.5])       # Antena 2 - 0.5m na północ (jeśli używana)
+            np.array([0.5, 0.0]),      # Antena 1
+            np.array([0.0, 0.5])       # Antena 2 (opcjonalna)
         ]
+        # Przytnij listę domyślnych pozycji do liczby plików
+        antenna_positions_meters = antenna_positions_meters[:len(file_paths)]
     
-    # Oblicz odległości dla każdej anteny
+    # 1. Oblicz odległości dla każdej anteny
     distances = []
+    valid_positions = []
+    valid_radii = []
+
     for i, file_path in enumerate(file_paths):
         dist = calculate_distance_from_file(
             file_path, tx_power, path_loss_exp, frequency_mhz, threshold, verbose
         )
         distances.append(dist)
-        if dist is None:
-            return {
-                'success': False,
-                'distances': distances,
-                'location_meters': None,
-                'location_geographic': None,
-                'message': f'Nie udało się obliczyć odległości dla anteny {i} z pliku {file_path}',
-                'num_antennas': len(file_paths)
-            }
-    
-    # Triangulacja w zależności od liczby anten
-    if len(file_paths) == 3:
-        # 3 anteny - trilateracja
-        location = trilaterate(
-            antenna_positions_meters[0], distances[0],
-            antenna_positions_meters[1], distances[1],
-            antenna_positions_meters[2], distances[2]
-        )
         
-        if location is None:
-            return {
-                'success': False,
-                'distances': distances,
-                'location_meters': None,
-                'location_geographic': None,
-                'message': 'Anteny są współliniowe - nie można jednoznacznie określić lokalizacji',
-                'num_antennas': 3
-            }
-        
-        message = f'Trilateracja dla 3 anten - lokalizacja: x={location[0]:.2f}m, y={location[1]:.2f}m'
-        
-    else:
-        # 2 anteny - przecięcie okręgów
-        intersections = find_circle_intersections(
-            antenna_positions_meters[0], distances[0],
-            antenna_positions_meters[1], distances[1]
-        )
-        
-        if intersections:
-            loc1, loc2 = intersections
-            dist1 = np.linalg.norm(loc1)
-            dist2 = np.linalg.norm(loc2)
+        if dist is not None:
+            valid_radii.append(dist)
+            # Pobierz pozycję odpowiadającą tej antenie (zabezpieczenie przed index error)
+            if i < len(antenna_positions_meters):
+                valid_positions.append(np.array(antenna_positions_meters[i]))
+            else:
+                if verbose: print(f"Ostrzeżenie: Brak zdefiniowanej pozycji dla anteny {i}, pomijanie.")
+                valid_radii.pop() # Cofnij dodanie promienia
 
-            location = loc1 if dist1 <= dist2 else loc2
-            
-            message = f'Bilateracja dla 2 anten - 2 możliwe lokalizacje: ' + \
-                     f'LOK1: x={loc1[0]:.2f}m, y={loc1[1]:.2f}m | ' + \
-                     f'LOK2: x={loc2[0]:.2f}m, y={loc2[1]:.2f}m | ' + \
-                     f'Wybrano LOK{"1" if dist1 <= dist2 else "2"} (bliższą centrum - może być błędne!)'
-        else:
-            # Brak przecięcia - estymacja
-            location = find_best_estimate_no_intersection(
-                antenna_positions_meters[0], distances[0],
-                antenna_positions_meters[1], distances[1]
-            )
-            if location is None:
-                return {
-                    'success': False,
-                    'distances': distances,
-                    'location_meters': None,
-                    'location_geographic': None,
-                    'message': 'Nie udało się znaleźć estymacji lokalizacji',
-                    'num_antennas': 2
-                }
-            message = f'Estymacja dla 2 anten (brak przecięcia) - lokalizacja: x={location[0]:.2f}m, y={location[1]:.2f}m'
+    # Sprawdzenie czy mamy wystarczająco danych po obliczeniach
+    if len(valid_radii) < 2:
+        return {
+            'success': False,
+            'distances': distances,
+            'location_meters': None,
+            'location_geographic': None,
+            'message': f'Nie udało się obliczyć poprawnej odległości dla wystarczającej liczby anten (min 2). Sukcesy: {len(valid_radii)}',
+            'num_antennas': len(file_paths)
+        }
+
+    # 2. Uruchomienie algorytmu Grid Search
+    if verbose:
+        print(f"Obliczanie lokalizacji metodą Grid Search dla {len(valid_positions)} anten.")
+        for i, (pos, r) in enumerate(zip(valid_positions, valid_radii)):
+            print(f"  Antena [{pos[0]:.1f}, {pos[1]:.1f}] -> r={r:.2f}m")
+
+    best_location = perform_grid_search(valid_positions, valid_radii)
     
-    # Konwersja na współrzędne geograficzne
-    delta_lat_deg, delta_lon_deg, delta_lat_min, delta_lon_min = meters_to_geographic_degrees(
-        location[0], location[1], reference_lat
-    )
-    
-    absolute_lat = reference_lat + delta_lat_deg
-    absolute_lon = reference_lon + delta_lon_deg
-    
-    result = {
-        'success': True,
-        'distances': distances,
-        'location_meters': location.tolist(),
-        'location_geographic': {
-            'lat': absolute_lat,
-            'lon': absolute_lon,
-            'lat_offset_degrees': delta_lat_deg,
-            'lon_offset_degrees': delta_lon_deg,
-            'lat_offset_minutes': delta_lat_min,
-            'lon_offset_minutes': delta_lon_min
-        },
-        'message': message,
-        'num_antennas': len(file_paths)
-    }
-    
-    # Dodaj alternatywne lokalizacje dla przypadku 2 anten z przecięciem
-    if len(file_paths) == 2 and 'intersections' in locals() and intersections:
-        loc1, loc2 = intersections
+    # 3. Konwersja wyników na format wyjściowy
+    if best_location is not None:
+        delta_lat_deg, delta_lon_deg, delta_lat_min, delta_lon_min = meters_to_geographic_degrees(
+            best_location[0], best_location[1], reference_lat
+        )
         
-        # Konwertuj oba punkty na współrzędne geograficzne
-        delta_lat1, delta_lon1, _, _ = meters_to_geographic_degrees(loc1[0], loc1[1], reference_lat)
-        delta_lat2, delta_lon2, _, _ = meters_to_geographic_degrees(loc2[0], loc2[1], reference_lat)
+        absolute_lat = reference_lat + delta_lat_deg
+        absolute_lon = reference_lon + delta_lon_deg
         
-        result['alternative_locations'] = [
-            {
-                'location_meters': loc1.tolist(),
-                'location_geographic': {
-                    'lat': reference_lat + delta_lat1,
-                    'lon': reference_lon + delta_lon1,
-                    'lat_offset_degrees': delta_lat1,
-                    'lon_offset_degrees': delta_lon1
-                }
+        message = f"Lokalizacja wyznaczona algorytmem Grid Search (błąd minimalny). x={best_location[0]:.2f}m, y={best_location[1]:.2f}m"
+
+        return {
+            'success': True,
+            'distances': distances,
+            'location_meters': best_location.tolist(),
+            'location_geographic': {
+                'lat': absolute_lat,
+                'lon': absolute_lon,
+                'lat_offset_degrees': delta_lat_deg,
+                'lon_offset_degrees': delta_lon_deg,
+                'lat_offset_minutes': delta_lat_min,
+                'lon_offset_minutes': delta_lon_min
             },
-            {
-                'location_meters': loc2.tolist(),
-                'location_geographic': {
-                    'lat': reference_lat + delta_lat2,
-                    'lon': reference_lon + delta_lon2,
-                    'lat_offset_degrees': delta_lat2,
-                    'lon_offset_degrees': delta_lon2
-                }
-            }
-        ]
-    
-    return result
+            'message': message,
+            'num_antennas': len(valid_radii)
+        }
+    else:
+        return {
+            'success': False,
+            'distances': distances,
+            'location_meters': None,
+            'location_geographic': None,
+            'message': 'Algorytm Grid Search nie zwrócił wyniku.',
+            'num_antennas': len(valid_radii)
+        }
 
-
+# ==============================================================================
+#   URUCHOMIENIE TESTOWE
+# ==============================================================================
 
 if __name__ == "__main__":
+    # Przykładowe ścieżki
     example_files = [
         '/home/szymon/Downloads/GPS_JAMMING/GPS-JAMMING/GpsJammerApp/test1.bin',
         '/home/szymon/Downloads/GPS_JAMMING/GPS-JAMMING/GpsJammerApp/test2.bin',
         '/home/szymon/Downloads/GPS_JAMMING/GPS-JAMMING/GpsJammerApp/test3.bin'
     ]
     
-    print("Test z 3 antenami:")
-    result_3ant = triangulate_jammer_location(
+    # Aby test zadziałał, pliki muszą istnieć. Tu tylko symulacja wywołania:
+    print("--- TEST GRID SEARCH ---")
+    print("Uwaga: Upewnij się, że ścieżki do plików w sekcji __main__ są poprawne, jeśli chcesz uruchomić to bezpośrednio.")
+    
+    # W normalnym użyciu importujesz funkcję triangulate_jammer_location do innego skryptu.
+    # Poniżej kod, który możesz odkomentować, jeśli masz pliki .bin w folderze
+    
+  ##
+    result = triangulate_jammer_location(
         example_files,
         reference_lat=50.00898,
         reference_lon=19.98287,
         verbose=True
     )
     
-    if result_3ant['success']:
-        loc_geo = result_3ant['location_geographic']
-        print(f"📍 Lokalizacja jammera:")
-        print(f"   Współrzędne geograficzne: {loc_geo['lat']:.8f}°N, {loc_geo['lon']:.8f}°E")
-        print(f"   Przesunięcie: {loc_geo['lat_offset_degrees']:.6f}° ({loc_geo['lat_offset_minutes']:.2f}') lat")
-        print(f"                 {loc_geo['lon_offset_degrees']:.6f}° ({loc_geo['lon_offset_minutes']:.2f}') lon")
-        print(f"   W metrach: x={result_3ant['location_meters'][0]:.2f}m, y={result_3ant['location_meters'][1]:.2f}m")
-        print(f"Odległości: {result_3ant['distances']}")
+    if result['success']:
+        loc_geo = result['location_geographic']
+        print(f"\n>>> ZNALEZIONO LOKALIZACJĘ (Grid Search) <<<")
+        print(f"    Współrzędne: {loc_geo['lat']:.8f}°N, {loc_geo['lon']:.8f}°E")
+        print(f"    Metry (x,y): {result['location_meters'][0]:.2f}, {result['location_meters'][1]:.2f}")
+        print(f"    Wiadomość: {result['message']}")
     else:
-        print("❌ BŁĄD:", result_3ant['message'])
-    
-    print("\n" + "="*60 + "\n")
-    
-    # Test z 2 antenami
-    print("Test z 2 antenami:")
-    result_2ant = triangulate_jammer_location(
-        example_files[:2],  # tylko pierwsze 2 pliki
-        reference_lat=50.06143,
-        reference_lon=19.93658,
-        verbose=True
-    )
-    
-    if result_2ant['success']:
-        loc_geo = result_2ant['location_geographic']
-        print("SUKCES!")
-        print(f"📍 Wybrana lokalizacja jammera:")
-        print(f"   Współrzędne geograficzne: {loc_geo['lat']:.8f}°N, {loc_geo['lon']:.8f}°E")
-        print(f"   Przesunięcie: {loc_geo['lat_offset_degrees']:.6f}° ({loc_geo['lat_offset_minutes']:.2f}') lat")
-        print(f"                 {loc_geo['lon_offset_degrees']:.6f}° ({loc_geo['lon_offset_minutes']:.2f}') lon")
-        # Pokaż alternatywne lokalizacje jeśli są dostępne
-        if 'alternative_locations' in result_2ant:
-            print(f"\n🔄 UWAGA: Dla 2 anten istnieją 2 możliwe lokalizacje!")
-            for i, alt_loc in enumerate(result_2ant['alternative_locations'], 1):
-                alt_geo = alt_loc['location_geographic']
-                alt_meters = alt_loc['location_meters']
-                print(f"   Opcja {i}: {alt_geo['lat']:.8f}°N, {alt_geo['lon']:.8f}°E")
-                print(f"           (x={alt_meters[0]:.2f}m, y={alt_meters[1]:.2f}m)")
-            print("Użyj trzeciej anteny dla jednoznacznego określenia lokalizacji!")
-    else:
-        print("❌ BŁĄD:", result_2ant['message'])
+        print(f"\n>>> BŁĄD <<<")
+        print(result['message'])
+  ##
