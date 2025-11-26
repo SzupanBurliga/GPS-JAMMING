@@ -5,13 +5,13 @@ import os.path
 import math
 import argparse
 
-GPS_WEAKEN_SCALE = 0.187  
+# Twój wyliczony skalar
+GPS_WEAKEN_SCALE = 0.125
 GPS_TRAJ_FILE = 'traj.csv' 
 DYNAMIC_JAMMER_POWER = 0.605 
 STATIC_JAMMER_POWER = 0.605
 
 def latlon_to_ecef(lat, lon, alt):
-    """Konwertuje współrzędne LLA na ECEF."""
     a = 6378137.0         
     f = 1 / 298.257223563 
     e_sq = f * (2 - f)    
@@ -30,6 +30,7 @@ def main(args):
     OUTPUT_FILE = args.output_file
     JAMMER_LOCATION = (args.jammer_lat, args.jammer_lon, args.jammer_alt)
     JAMMER_MAX_RANGE_METERS = args.jammer_range
+    NOISE_LEVEL = args.noise_level  # Pobranie poziomu szumu z argumentów
 
     DELAY_SECONDS = args.delay_seconds
     DURATION_SECONDS = args.duration_seconds
@@ -37,6 +38,7 @@ def main(args):
 
     try:
         print(f"Wczytywanie sygnału GPS z: {GPS_SIGNAL_FILE}")
+        # Zakładamy input signed 8-bit (standard z gps-sdr-sim -b 8)
         gps_data = np.fromfile(GPS_SIGNAL_FILE, dtype=np.int8).astype(np.float32)
     except FileNotFoundError:
         print(f"BŁĄD: Nie znaleziono pliku GPS: {GPS_SIGNAL_FILE}")
@@ -49,6 +51,8 @@ def main(args):
         print(f"BŁĄD: Nie znaleziono pliku jammera: {JAMMER_SIGNAL_FILE}")
         exit(1)
 
+    # 1. Skalowanie GPS (zmniejszenie mocy sygnału użytecznego)
+    print(f"Skalowanie sygnału GPS (czynnik: {GPS_WEAKEN_SCALE})...")
     gps_slaby = gps_data * GPS_WEAKEN_SCALE
 
     min_len = min(len(gps_slaby), len(jammer_data))
@@ -56,6 +60,7 @@ def main(args):
     jammer_data = jammer_data[:min_len]
     jammer_power_profile = np.zeros_like(gps_slaby)
 
+    # --- OBSŁUGA JAMMERA (Dynamiczny/Statyczny) ---
     if os.path.exists(GPS_TRAJ_FILE):
         print(f"Tryb DYNAMICZNY (plik {GPS_TRAJ_FILE} znaleziony)")
         JAMMER_ECEF = latlon_to_ecef(JAMMER_LOCATION[0], JAMMER_LOCATION[1], JAMMER_LOCATION[2])
@@ -121,7 +126,7 @@ def main(args):
         profile_len = min(len(dynamic_jammer_power), len(jammer_power_profile))
         jammer_power_profile[:profile_len] = jammer_data[:profile_len] * dynamic_jammer_power[:profile_len]
 
-    # dla braku traj.csv (tryb statyczny)
+    # Tryb statyczny
     else:
         print(f"Tryb STATYCZNY (plik {GPS_TRAJ_FILE} nie istnieje)")
 
@@ -161,7 +166,14 @@ def main(args):
 
     print("Łączenie sygnału GPS i jammera...")
     sygnal_wynikowy_float = gps_slaby + jammer_power_profile
+
+    if NOISE_LEVEL > 0.0:
+        print(f"Dodawanie szumu AWGN (poziom: {NOISE_LEVEL})...")
+        noise = np.random.normal(0.0, NOISE_LEVEL, len(sygnal_wynikowy_float)).astype(np.float32)
+        sygnal_wynikowy_float += noise
+
     sygnal_wynikowy_float = np.clip(sygnal_wynikowy_float, -128.0, 127.0)
+    
     final_signal_uint8 = (sygnal_wynikowy_float.astype(np.int16) + 128).astype(np.uint8)
 
     print(f"Zapisywanie pliku wynikowego: {OUTPUT_FILE}")
@@ -187,8 +199,7 @@ if __name__ == "__main__":
     parser.add_argument("--samplerate", type=float, default=2048000.0, help="Częstotliwość próbkowania (domyślnie: 2048000.0)")
     parser.add_argument("--delay-seconds", type=int, default=60, help="Opóźnienie jammera w sekundach (domyślnie: 60.0)")
     parser.add_argument("--duration-seconds", type=int, default=30, help="Czas trwania jammera w sekundach (domyślnie: 30.0)")
-    
-    
+    parser.add_argument("--noise-level", type=float, default=6.25, help="Poziom szumu AWGN (odchylenie std). Domyślnie 4.0.")
     
     parsed_args = parser.parse_args()
     main(parsed_args)
